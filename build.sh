@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 1. 设置 Qt 环境路径
-QT_PATH="/home/jason/Qt/6.5.3/gcc_64"
+QT_PATH="/home/lixiang/Qt/6.5.3/gcc_64"
 QT_CMAKE="$QT_PATH/bin/qt-cmake"
 
 # 2. 定义目录
@@ -12,6 +12,7 @@ echo "--- 开始编译 Qmmp ---"
 echo "使用 Qt 路径: $QT_PATH"
 
 # 3. 创建并进入编译目录
+rm -rf $BUILD_DIR
 mkdir -p $BUILD_DIR
 cd $BUILD_DIR
 

@@ -1,0 +1,16 @@
+# Compilation and Build Outputs
+build/
+build-linux/
+temp_plugins/
+
+# Debian Packaging
+qmmp_*_amd64/
+*.deb
+
+# Build artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.so
+*.so.*

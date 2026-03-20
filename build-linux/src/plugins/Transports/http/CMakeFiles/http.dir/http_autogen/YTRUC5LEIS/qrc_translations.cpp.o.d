@@ -1,3 +1,0 @@
-src/plugins/Transports/http/CMakeFiles/http.dir/http_autogen/YTRUC5LEIS/qrc_translations.cpp.o: \
- /home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Transports/http/http_autogen/YTRUC5LEIS/qrc_translations.cpp \
- /usr/include/stdc-predef.h
