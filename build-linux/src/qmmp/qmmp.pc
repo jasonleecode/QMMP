@@ -1,0 +1,12 @@
+prefix=/usr/local
+exec_prefix=/usr/local
+libdir=/usr/local/lib
+includedir=/usr/local/include
+plugindir=/usr/local/lib/qmmp-2.3
+
+Name: qmmp
+Description: qmmp core library
+Version: 2.3.1
+Requires: Qt6Core Qt6Gui Qt6Widgets
+Libs: -L${libdir} -lqmmp
+Cflags: -I${includedir}

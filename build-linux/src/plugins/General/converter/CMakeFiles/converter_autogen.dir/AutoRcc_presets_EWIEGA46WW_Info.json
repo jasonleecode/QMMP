@@ -1,0 +1,25 @@
+{
+	"BUILD_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/General/converter/converter_autogen",
+	"CMAKE_BINARY_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/General/converter",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/General/converter",
+	"CMAKE_SOURCE_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1",
+	"CROSS_CONFIG" : false,
+	"GENERATOR" : "Unix Makefiles",
+	"INCLUDE_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/General/converter/converter_autogen/include",
+	"INPUTS" : 
+	[
+		"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/General/converter/presets.conf"
+	],
+	"LOCK_FILE" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/General/converter/CMakeFiles/converter_autogen.dir/AutoRcc_presets_EWIEGA46WW_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "--no-zstd", "-name", "presets" ],
+	"OUTPUT_CHECKSUM" : "EWIEGA46WW",
+	"OUTPUT_NAME" : "qrc_presets.cpp",
+	"RCC_EXECUTABLE" : "/home/lixiang/Qt/6.5.3/gcc_64/./libexec/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/General/converter/CMakeFiles/converter_autogen.dir/AutoRcc_presets_EWIEGA46WW_Used.txt",
+	"SOURCE" : "/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/General/converter/presets.qrc",
+	"USE_BETTER_GRAPH" : false,
+	"VERBOSITY" : 0
+}

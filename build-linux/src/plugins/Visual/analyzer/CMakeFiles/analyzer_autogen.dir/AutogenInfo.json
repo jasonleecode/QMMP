@@ -1,0 +1,141 @@
+{
+	"BUILD_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer/analyzer_autogen",
+	"CMAKE_BINARY_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_LIST_FILES" : 
+	[
+		"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/CMakeLists.txt",
+		"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/translations/translations.qrc"
+	],
+	"CMAKE_SOURCE_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1",
+	"CROSS_CONFIG" : false,
+	"DEP_FILE" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer/analyzer_autogen/deps",
+	"DEP_FILE_RULE_NAME" : "analyzer_autogen/timestamp",
+	"HEADERS" : 
+	[
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/analyzer.h",
+			"MU",
+			"EWIEGA46WW/moc_analyzer.cpp",
+			null
+		],
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/analyzercolorwidget.h",
+			"MU",
+			"EWIEGA46WW/moc_analyzercolorwidget.cpp",
+			null
+		],
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/analyzersettingsdialog.h",
+			"MU",
+			"EWIEGA46WW/moc_analyzersettingsdialog.cpp",
+			null
+		],
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/visualanalyzerfactory.h",
+			"MU",
+			"EWIEGA46WW/moc_visualanalyzerfactory.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer/analyzer_autogen/include",
+	"MOC_COMPILATION_FILE" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer/analyzer_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"QMMP_WS_X11",
+		"QT_CORE_LIB",
+		"QT_DEPRECATED_WARNINGS",
+		"QT_DISABLE_DEPRECATED_BEFORE=0x060200",
+		"QT_GUI_LIB",
+		"QT_MESSAGELOGCONTEXT",
+		"QT_WIDGETS_LIB",
+		"analyzer_EXPORTS"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer",
+		"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer",
+		"/home/lixiang/Downloads/qmmp-2.3.1/src",
+		"/home/lixiang/Qt/6.5.3/gcc_64/include/QtWidgets",
+		"/home/lixiang/Qt/6.5.3/gcc_64/include",
+		"/home/lixiang/Qt/6.5.3/gcc_64/include/QtCore",
+		"/home/lixiang/Qt/6.5.3/gcc_64/mkspecs/linux-g++",
+		"/home/lixiang/Qt/6.5.3/gcc_64/include/QtGui",
+		"/usr/include",
+		"/usr/include/c++/9",
+		"/usr/include/x86_64-linux-gnu/c++/9",
+		"/usr/include/c++/9/backward",
+		"/usr/lib/gcc/x86_64-linux-gnu/9/include",
+		"/usr/local/include",
+		"/usr/include/x86_64-linux-gnu"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT",
+		"Q_GADGET_EXPORT"
+	],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/c++",
+		"-std=gnu++17",
+		"-w",
+		"-dM",
+		"-E",
+		"/usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer/analyzer_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 12,
+	"PARSE_CACHE_FILE" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer/CMakeFiles/analyzer_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/home/lixiang/Qt/6.5.3/gcc_64/./libexec/moc",
+	"QT_UIC_EXECUTABLE" : "/home/lixiang/Qt/6.5.3/gcc_64/./libexec/uic",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 5,
+	"SETTINGS_FILE" : "/home/lixiang/Downloads/qmmp-2.3.1/build-linux/src/plugins/Visual/analyzer/CMakeFiles/analyzer_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/analyzer.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/analyzercolorwidget.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/analyzersettingsdialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/lixiang/Downloads/qmmp-2.3.1/src/plugins/Visual/analyzer/visualanalyzerfactory.cpp",
+			"MU",
+			null
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"USE_BETTER_GRAPH" : false,
+	"VERBOSITY" : 0
+}
