@@ -20,10 +20,39 @@ mkdir -p "${PKG_DIR}/usr/share/applications"
 mkdir -p "${PKG_DIR}/usr/share/icons/hicolor"
 mkdir -p "${PKG_DIR}/usr/share/metainfo"
 
-# 2. Copy main executable
+# 2. Copy main executable and set RPATH
 cp "${BUILD_DIR}/src/app/qmmp" "${PKG_DIR}/usr/bin/"
 
-# 3. Copy shared libraries
+# 3. Bundle Qt6 libraries
+echo "Bundling Qt6 libraries..."
+QT_BUNDLE_DIR="${PKG_DIR}/usr/lib/qmmp/qt6"
+mkdir -p "${QT_BUNDLE_DIR}"
+
+# List of essential Qt6 libraries to bundle
+QT_LIBS=(
+    "libQt6Widgets.so.6"
+    "libQt6Gui.so.6"
+    "libQt6Core.so.6"
+    "libQt6Network.so.6"
+    "libQt6DBus.so.6"
+    "libQt6Multimedia.so.6"
+    "libQt6OpenGLWidgets.so.6"
+    "libQt6OpenGL.so.6"
+    "libQt6EglFsvivanteIntegration.so.6"
+    "libQt6EglFsKmsSupport.so.6"
+)
+
+for lib in "${QT_LIBS[@]}"; do
+    if [ -f "${QT_LIB_DIR}/${lib}" ]; then
+        cp -P ${QT_LIB_DIR}/${lib}* "${QT_BUNDLE_DIR}/"
+    fi
+done
+
+# Also bundle platforms and wayland plugins if they exist
+mkdir -p "${PKG_DIR}/usr/lib/qmmp/qt6/platforms"
+cp -r "${QT_PATH}/plugins/platforms"/*.so "${PKG_DIR}/usr/lib/qmmp/qt6/platforms/" 2>/dev/null || true
+
+# 4. Copy shared libraries and set RPATH
 cp "${BUILD_DIR}/src/qmmp/libqmmp.so.2.3.1" "${PKG_DIR}/usr/lib/"
 ln -sf "libqmmp.so.2.3.1" "${PKG_DIR}/usr/lib/libqmmp.so.2"
 ln -sf "libqmmp.so.2.3.1" "${PKG_DIR}/usr/lib/libqmmp.so"
@@ -32,7 +61,15 @@ cp "${BUILD_DIR}/src/qmmpui/libqmmpui.so.2.3.1" "${PKG_DIR}/usr/lib/"
 ln -sf "libqmmpui.so.2.3.1" "${PKG_DIR}/usr/lib/libqmmpui.so.2"
 ln -sf "libqmmpui.so.2.3.1" "${PKG_DIR}/usr/lib/libqmmpui.so"
 
-# 4. Copy and flatten plugins structure
+# Use patchelf to set RPATH (if patchelf is available)
+if command -v patchelf >/dev/null 2>&1; then
+    echo "Setting RPATH for executable and libraries..."
+    patchelf --set-rpath '$ORIGIN/../lib/qmmp/qt6' "${PKG_DIR}/usr/bin/qmmp"
+    patchelf --set-rpath '$ORIGIN/../lib/qmmp/qt6' "${PKG_DIR}/usr/lib/libqmmp.so.2.3.1"
+    patchelf --set-rpath '$ORIGIN/../lib/qmmp/qt6' "${PKG_DIR}/usr/lib/libqmmpui.so.2.3.1"
+fi
+
+# 5. Copy and flatten plugins structure
 echo "Flattening and copying plugins..."
 find "${BUILD_DIR}/src/plugins" -name "*.so" | while read -r plugin_path; do
     plugin_name=$(basename "$plugin_path")
@@ -45,8 +82,13 @@ find "${BUILD_DIR}/src/plugins" -name "*.so" | while read -r plugin_path; do
         target_category="$parent_dir"
     fi
     
-    mkdir -p "${PKG_DIR}/usr/lib/qmmp-2.3/${target_category}"
-    cp "${plugin_path}" "${PKG_DIR}/usr/lib/qmmp-2.3/${target_category}/${plugin_name}"
+    dest_dir="${PKG_DIR}/usr/lib/qmmp-2.3/${target_category}"
+    mkdir -p "${dest_dir}"
+    cp "${plugin_path}" "${dest_dir}/${plugin_name}"
+    
+    if command -v patchelf >/dev/null 2>&1; then
+        patchelf --set-rpath '$ORIGIN/../../qmmp/qt6' "${dest_dir}/${plugin_name}"
+    fi
 done
 
 # 5. Copy desktop files and metainfo
@@ -73,7 +115,7 @@ Version: ${PKG_VERSION}
 Section: sound
 Priority: optional
 Architecture: ${PKG_ARCH}
-Depends: libc6, libstdc++6, libqt6widgets6, libqt6network6, libqt6gui6, libqt6core6, libqt6dbus6, libqt6multimedia6
+Depends: libc6, libstdc++6
 Maintainer: Ilya Kotov <forkotov02@ya.ru>
 Description: Qmmp is an audio-player, written with the help of the Qt library.
  The user interface is similar to winamp or xmms.
