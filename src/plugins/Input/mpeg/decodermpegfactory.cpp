@@ -67,36 +67,37 @@ DecoderMpegFactory::DecoderMpegFactory()
 bool DecoderMpegFactory::canDecode(QIODevice *input) const
 {
     char buf[8192];
-    qint64 dataSize = sizeof(buf);
+    qint64 dataSize = input->peek(buf, sizeof(buf));
 
-    if(input->peek(buf, sizeof(buf)) != sizeof(buf))
+    if(dataSize < 4)
         return false;
 
     if (!memcmp(buf, "FLV", 3)) //skip Macromedia Flash Video
         return false;
 
-    if (!memcmp(buf + 8, "WAVE", 4))
+    if (dataSize >= 22 && !memcmp(buf + 8, "WAVE", 4))
         return !memcmp(buf + 20, "U" ,1);
 
-    if(!memcmp(buf, "ID3", 3))
+    if(dataSize >= 10 && !memcmp(buf, "ID3", 3))
     {
         TagLib::ByteVector byteVector(buf, dataSize);
         TagLib::ID3v2::Header header(byteVector);
 
-        //skip id3v2tag if possible
+        const qint64 tagSize = header.completeTagSize();
         if(input->isSequential())
         {
-            if(header.tagSize() >= dataSize)
+            if(tagSize >= dataSize)
                 return false;
-
-            dataSize -= header.tagSize();
-            memmove(buf, buf + header.tagSize(), dataSize);
+            dataSize -= tagSize;
+            memmove(buf, buf + tagSize, dataSize);
         }
         else
         {
-            input->seek(header.tagSize());
-            dataSize = input->read(buf, sizeof(buf));
-            input->seek(0); //restore initial position
+            const qint64 start = input->pos();
+            if(!input->seek(start + tagSize))
+                return false;
+            dataSize = input->peek(buf, sizeof(buf));
+            input->seek(start);
         }
     }
 

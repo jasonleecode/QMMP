@@ -8,3 +8,8 @@ endif(USE_SKINNED AND SKINNED_AVAILABLE)
 if(USE_QSUI)
     add_subdirectory(qsui)
 endif(USE_QSUI)
+
+option(USE_CLASSIC "Classic Chinese player interface" ON)
+if(USE_CLASSIC)
+    add_subdirectory(classic)
+endif()

@@ -56,10 +56,10 @@ bool DecoderFFmpegFactory::canDecode(QIODevice *i) const
 
     AVProbeData pd;
     memset(&pd, 0, sizeof(pd));
-    uint8_t buf[PROBE_BUFFER_SIZE + AVPROBE_PADDING_SIZE];
+    uint8_t buf[PROBE_BUFFER_SIZE + AVPROBE_PADDING_SIZE] = {};
     pd.buf_size = i->peek((char*)buf, sizeof(buf) - AVPROBE_PADDING_SIZE);
     pd.buf = buf;
-    if(pd.buf_size < PROBE_BUFFER_SIZE)
+    if(pd.buf_size <= 0)
         return false;
     const AVInputFormat *fmt = av_probe_input_format(&pd, 1);
     if(!fmt)
@@ -67,6 +67,10 @@ bool DecoderFFmpegFactory::canDecode(QIODevice *i) const
 
     QStringList formats = QString::fromLatin1(fmt->name).split(QLatin1Char(','));
 
+    if((filters.contains(u"*.flac"_s) && formats.contains(u"flac"_s)) ||
+       (filters.contains(u"*.ogg"_s) && formats.contains(u"ogg"_s)) ||
+       (filters.contains(u"*.wav"_s) && formats.contains(u"wav"_s)))
+        return true;
     if(filters.contains(u"*.wma"_s) && formats.contains(u"asf"_s))
         return true;
     if(filters.contains(u"*.mp3"_s) && formats.contains(u"mp3"_s))
@@ -101,6 +105,12 @@ DecoderProperties DecoderFFmpegFactory::properties() const
         u"*.wma"_s, u"*.ape"_s, u"*.tta"_s, u"*.m4a"_s, u"*.m4b"_s, u"*.aac"_s, u"*.mp3"_s, u"*.ra"_s, u"*.shn"_s,
         u"*.ac3"_s, u"*.dts"_s, u"*.mka"_s,  u"*.vqf"_s, u"*.tak"_s, u"*.dsf"_s, u"*.dsdiff"_s
     };
+    if(avcodec_find_decoder(AV_CODEC_ID_FLAC))
+        filters.insert(u"*.flac"_s);
+    if(avcodec_find_decoder(AV_CODEC_ID_VORBIS))
+        filters.insert(u"*.ogg"_s);
+    if(avcodec_find_decoder(AV_CODEC_ID_PCM_S16LE))
+        filters.insert(u"*.wav"_s);
     const QStringList disabledFilters = settings.value(u"FFMPEG/disabled_filters"_s, { u"*.mp3"_s }).toStringList();
 
     for(const QString &filter : std::as_const(disabledFilters))
@@ -145,6 +155,12 @@ DecoderProperties DecoderFFmpegFactory::properties() const
     properties.name = tr("FFmpeg Plugin");
     properties.filters = QStringList(filters.cbegin(), filters.cend());
     properties.description = tr("FFmpeg Formats");
+    if(filters.contains(u"*.flac"_s))
+        properties.contentTypes << u"audio/flac"_s;
+    if(filters.contains(u"*.ogg"_s))
+        properties.contentTypes << u"audio/ogg"_s;
+    if(filters.contains(u"*.wav"_s))
+        properties.contentTypes << u"audio/wav"_s << u"audio/x-wav"_s;
     if(filters.contains(u"*.wma"_s))
         properties.contentTypes << u"audio/x-ms-wma"_s;
     if(filters.contains(u"*.mp3"_s))

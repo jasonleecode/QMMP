@@ -9,3 +9,4 @@ SUBDIRS += skinned
 contains(CONFIG, WITH_QSUI){
 SUBDIRS += qsui
 }
+SUBDIRS += classic

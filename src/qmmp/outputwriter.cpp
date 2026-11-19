@@ -83,7 +83,7 @@ bool OutputWriter::initialize(quint32 freq, ChannelMap map)
     m_output_size = QMMP_BLOCK_FRAMES * m_channels * 4;
     m_output_buf = new unsigned char[m_output_size * m_output->sampleSize()];
 
-    m_bytesPerMillisecond = m_frequency * m_channels * AudioParameters::sampleSize(m_format) / 1000;
+    m_bytesPerSecond = qint64(m_frequency) * m_channels * AudioParameters::sampleSize(m_format);
     m_recycler.configure(m_in_params.sampleRate(), m_in_params.channels()); //calculate output buffer size
     updateEqSettings();
     eq_clean_history();
@@ -110,7 +110,7 @@ void OutputWriter::finish()
 void OutputWriter::seek(qint64 pos, bool reset)
 {
     m_mutex.lock();
-    m_totalWritten = pos * m_bytesPerMillisecond;
+    m_totalWritten = pos * m_bytesPerSecond / 1000;
     m_currentMilliseconds = -1;
     m_skip = isRunning() && reset;
     m_mutex.unlock();
@@ -142,7 +142,7 @@ void OutputWriter::dispatchVisual (Buffer *buffer)
         return;
 
     Visual::addAudio(buffer->data, buffer->samples, m_channels,
-                     m_totalWritten / m_bytesPerMillisecond, m_output->latency());
+                     m_totalWritten * 1000 / m_bytesPerSecond, m_output->latency());
 }
 
 bool OutputWriter::prepareConverters()
@@ -216,7 +216,7 @@ void OutputWriter::dispatch(const AudioParameters &p)
 void OutputWriter::run()
 {
     m_mutex.lock ();
-    if (!m_bytesPerMillisecond)
+    if (!m_bytesPerSecond)
     {
         qCWarning(core, "invalid audio parameters");
         m_mutex.unlock ();
@@ -360,7 +360,7 @@ void OutputWriter::run()
 
 void OutputWriter::status()
 {
-    qint64 ct = m_totalWritten / m_bytesPerMillisecond - m_output->latency();
+    qint64 ct = m_totalWritten * 1000 / m_bytesPerSecond - m_output->latency();
 
     if (ct < 0)
         ct = 0;

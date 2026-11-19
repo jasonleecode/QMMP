@@ -214,13 +214,8 @@ DecoderFactory *Decoder::findByFilePath(const QString &path, bool useContent)
             return fact;
     }
 
-    //fallback: try to find by content
     if(!useContent)
         return findByContent(&file);
-
-    //fallback: use first available factory
-    if(!filtered.isEmpty() && !useContent)
-        return filtered.constFirst();
 
     return nullptr;
 }
@@ -271,6 +266,7 @@ DecoderFactory *Decoder::findByProtocol(const QString &p)
 
 QList<DecoderFactory *> Decoder::findByFileExtension(const QString &path)
 {
+    loadPlugins();
     QList<DecoderFactory*> filtered;
     DecoderFactory *fact = nullptr;
     for(QmmpPluginCache *item : std::as_const(*m_cache))

@@ -121,10 +121,23 @@ QString Qmmp::pluginPath()
 
 QStringList Qmmp::findPlugins(const QString &prefix)
 {
-    QDir pluginDir(pluginPath() + u"/"_s + prefix);
+    QStringList roots { pluginPath() };
+    if(prefix == "Input"_L1)
+        roots << configDir() + QStringLiteral("/plugins-" STR(QMMP_VERSION_MAJOR) "." STR(QMMP_VERSION_MINOR));
+
     QStringList paths;
-    for(const QFileInfo &info : pluginDir.entryInfoList({ u"*.dll"_s, u"*.so"_s }, QDir::Files))
-        paths << info.canonicalFilePath();
+    for(const QString &root : std::as_const(roots))
+    {
+        if(root.isEmpty())
+            continue;
+        const QDir pluginDir(QDir(root).filePath(prefix));
+        for(const QFileInfo &info : pluginDir.entryInfoList({ u"*.dll"_s, u"*.so"_s }, QDir::Files))
+        {
+            const QString path = info.canonicalFilePath();
+            if(!path.isEmpty() && !paths.contains(path))
+                paths << path;
+        }
+    }
     return paths;
 }
 

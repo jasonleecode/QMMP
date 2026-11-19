@@ -89,11 +89,30 @@ endif(QT_LRELEASE_EXECUTABLE)
 
 message(STATUS "Generating translations ...")
 
+file(GLOB_RECURSE translation_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/*.ts")
+set(lrelease_options -silent)
 if(SVN_VERSION)
-    execute_process(COMMAND find ${CMAKE_CURRENT_SOURCE_DIR} -name *.ts COMMAND xargs ${QT_LRELEASE_EXECUTABLE} -silent -nounfinished)
-else(SVN_VERSION)
-    execute_process(COMMAND find ${CMAKE_CURRENT_SOURCE_DIR} -name *.ts COMMAND xargs ${QT_LRELEASE_EXECUTABLE} -silent)
-endif(SVN_VERSION)
+    list(APPEND lrelease_options -nounfinished)
+endif()
+set(pending_translations)
+foreach(source IN LISTS translation_sources)
+    string(REGEX REPLACE "[.]ts$" ".qm" output "${source}")
+    if(NOT "${lrelease_options}" STREQUAL "${last_lrelease_options}" OR
+       NOT EXISTS "${output}" OR "${source}" IS_NEWER_THAN "${output}")
+        list(APPEND pending_translations "${source}")
+    endif()
+endforeach()
+# Batch files to stay within the Windows command-line length limit.
+while(pending_translations)
+    list(SUBLIST pending_translations 0 50 batch)
+    execute_process(COMMAND "${QT_LRELEASE_EXECUTABLE}" ${lrelease_options} ${batch}
+                    RESULT_VARIABLE result)
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR "lrelease failed: ${result}")
+    endif()
+    list(REMOVE_ITEM pending_translations ${batch})
+endwhile()
+set(last_lrelease_options "${lrelease_options}" CACHE INTERNAL "Last translation compiler options")
 
 set(PLUGIN_DIR "${CMAKE_INSTALL_LIBDIR}/qmmp-${QMMP_VERSION_MAJOR}.${QMMP_VERSION_MINOR}" CACHE STRING "plugin path")
 option(USE_SKINNED "standard skinned user interface" ON)
@@ -276,3 +295,16 @@ if(MPEG_DECODERS)
 endif(MPEG_DECODERS)
 
 message("")
+
+include(CTest)
+if(BUILD_TESTING AND UNIX AND TARGET classic AND TARGET mpeg AND TARGET ffmpeg AND TARGET null)
+    find_program(FFMPEG_EXECUTABLE ffmpeg)
+    if(FFMPEG_EXECUTABLE)
+        add_executable(classic_playback_test tests/classic_playback.cpp)
+        target_link_libraries(classic_playback_test PRIVATE Qt6::Widgets libqmmpui libqmmp)
+        add_test(NAME classic_playback COMMAND classic_playback_test
+                 ${FFMPEG_EXECUTABLE} $<TARGET_FILE:classic> $<TARGET_FILE:mpeg>
+                 $<TARGET_FILE:ffmpeg> $<TARGET_FILE:null>)
+        set_tests_properties(classic_playback PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 40)
+    endif()
+endif()

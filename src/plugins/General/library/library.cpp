@@ -166,6 +166,13 @@ bool Library::createTables()
         return false;
     }
 
+    if(!query.exec(u"CREATE INDEX IF NOT EXISTS track_library_filepath ON track_library(FilePath)"_s) ||
+       !query.exec(u"CREATE INDEX IF NOT EXISTS track_library_url ON track_library(URL)"_s))
+    {
+        qCWarning(plugin, "unable to index library: %s", qPrintable(query.lastError().text()));
+        return false;
+    }
+
     ok = query.exec(u"CREATE TABLE IF NOT EXISTS ignored_files(ID INTEGER PRIMARY KEY AUTOINCREMENT, FilePath TEXT UNIQUE)"_s);
 
     if(!ok)

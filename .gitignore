@@ -1,6 +1,7 @@
 # Compilation and Build Outputs
 build/
 build-linux/
+build-classic/
 temp_plugins/
 
 # Debian Packaging

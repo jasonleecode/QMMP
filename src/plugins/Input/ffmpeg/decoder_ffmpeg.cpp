@@ -64,7 +64,7 @@ static int64_t ffmpeg_seek(void *data, int64_t offset, int whence)
     }
     if(absolute_pos < 0 || absolute_pos > d->input()->size())
         return -1;
-    return d->input()->seek(absolute_pos);
+    return d->input()->seek(absolute_pos) ? absolute_pos : -1;
 }
 
 //channel map
@@ -122,11 +122,12 @@ bool DecoderFFmpeg::initialize()
 
     AVProbeData pd;
     memset(&pd, 0, sizeof(pd));
-    uint8_t buf[PROBE_BUFFER_SIZE + AVPROBE_PADDING_SIZE];
-    pd.filename = m_path.toLocal8Bit().constData();
+    uint8_t buf[PROBE_BUFFER_SIZE + AVPROBE_PADDING_SIZE] = {};
+    const QByteArray fileName = m_path.toLocal8Bit();
+    pd.filename = fileName.constData();
     pd.buf_size = input()->peek((char*)buf, sizeof(buf) - AVPROBE_PADDING_SIZE);
     pd.buf = buf;
-    if(pd.buf_size < PROBE_BUFFER_SIZE)
+    if(pd.buf_size <= 0)
     {
         qCWarning(plugin, "too small buffer size: %d bytes", pd.buf_size);
         return false;

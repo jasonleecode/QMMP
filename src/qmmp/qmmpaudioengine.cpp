@@ -464,10 +464,10 @@ void QmmpAudioEngine::run()
                     m_output->wait();
                     delete m_output;
                     m_output = createOutput();
-                    m_dithering->setFormats(m_decoder->audioParameters().format(),
-                                            m_output->outputAudioParameters().format());
                     if(m_output)
                     {
+                        m_dithering->setFormats(m_decoder->audioParameters().format(),
+                                                m_output->outputAudioParameters().format());
                         m_output->start();
                         StateHandler::instance()->dispatch(Qmmp::Playing);
                         StateHandler::instance()->dispatch(m_decoder->totalTime());

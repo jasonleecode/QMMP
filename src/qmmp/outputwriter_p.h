@@ -109,7 +109,7 @@ private:
     int m_channels = 0, m_kbps = 0;
     ChannelMap m_chan_map;
     Qmmp::AudioFormat m_format = Qmmp::PCM_UNKNOWN;
-    qint64 m_bytesPerMillisecond = 0;
+    qint64 m_bytesPerSecond = 0;
     std::atomic_bool m_user_stop = ATOMIC_VAR_INIT(false);
     std::atomic_bool m_pause = ATOMIC_VAR_INIT(false);
     std::atomic_bool m_muted = ATOMIC_VAR_INIT(false);
