@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Qmmp Classic</title>
+  <path fill="#122c3a" stroke="#83ddcb" stroke-width="2"
+        d="M30 3a27 27 0 0 1 22 42l8 9a3 3 0 0 1-1 4l-4 3a3 3 0 0 1-4-1l-9-9A27 27 0 1 1 30 3Z"/>
+  <g fill="none" stroke-linecap="round">
+    <path stroke="#52d9bb" stroke-width="4" d="M10 30a20 20 0 0 1 20-20"/>
+    <path stroke="#378c89" stroke-width="2.5" d="M16 30a14 14 0 0 1 10-13"/>
+    <path stroke="#52d9bb" stroke-width="4" d="m42 43 12 12"/>
+  </g>
+  <path fill="#fff2cc" d="M25 20a1.5 1.5 0 0 1 2.3-1.3l15 9.8a1.8 1.8 0 0 1 0 3l-15 9.8A1.5 1.5 0 0 1 25 40Z"/>
+</svg>

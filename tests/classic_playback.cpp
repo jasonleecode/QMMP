@@ -1,5 +1,8 @@
 #include <QApplication>
 #include <QDir>
+#include <QDockWidget>
+#include <QDragEnterEvent>
+#include <QMimeData>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QLabel>
@@ -122,7 +125,26 @@ int main(int argc, char **argv)
     CHECK(utf8Lyrics.open(QIODevice::WriteOnly));
     utf8Lyrics.write(QByteArray::fromHex("efbbbf") + QStringLiteral("[00:00]雨声响起").toUtf8());
     utf8Lyrics.close();
-    helper.replaceAndPlay({second});
+    auto dropTrack = [&](QWidget *target) {
+        QMimeData data;
+        data.setUrls({QUrl::fromLocalFile(second)});
+        QDragEnterEvent enter(QPoint(4, 4), Qt::CopyAction, &data, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(target, &enter);
+        QDropEvent drop(QPointF(4, 4), Qt::CopyAction, &data, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(target, &drop);
+        return enter.isAccepted() && drop.isAccepted();
+    };
+    auto *dock = window->findChild<QDockWidget *>("playlist");
+    CHECK(dock && dock->acceptDrops());
+    for(bool floating : {false, true})
+    {
+        dock->setFloating(floating);
+        const int count = list->model()->rowCount();
+        CHECK(dropTrack(list->viewport()));
+        CHECK(waitFor([&] { return list->model()->rowCount() == count + 1; }));
+        CHECK(core->state() == Qmmp::Playing && title->text() == "春天");
+    }
+    CHECK(dropTrack(title));
     CHECK(waitFor([&] { return title->text() == "雨声" && current->text() == "雨声响起"; }));
     player.stop();
     return 0;

@@ -1,4 +1,6 @@
 #include "classicwindow.h"
+#include "windowmagnet.h"
+#include "spectrum.h"
 #include <qmmp/soundcore.h>
 #include <qmmpui/configdialog.h>
 #include <qmmpui/mediaplayer.h>
@@ -56,6 +58,14 @@ private:
     int m_count = 0;
 };
 
+static QStringList droppedPaths(const QMimeData *data)
+{
+    QStringList paths;
+    for(const auto &url : data->urls())
+        paths << (url.isLocalFile() ? url.toLocalFile() : url.toString());
+    return paths;
+}
+
 static QString timeLabel(qint64 ms)
 {
     const qint64 seconds = qMax<qint64>(0, ms) / 1000;
@@ -98,8 +108,13 @@ ClassicWindow::ClassicWindow()
     m_title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     m_artist = new QLabel;
     m_artist->setObjectName("artist");
-    panel->addWidget(m_title);
-    panel->addWidget(m_artist);
+    auto *info = new QVBoxLayout;
+    info->addWidget(m_title);
+    info->addWidget(m_artist);
+    auto *header = new QHBoxLayout;
+    header->addLayout(info, 1);
+    header->addWidget(new ClassicSpectrum(deck), 0, Qt::AlignTop);
+    panel->addLayout(header);
     auto *timeline = new QHBoxLayout;
     m_position = new QSlider(Qt::Horizontal);
     m_position->setAccessibleName(QStringLiteral("播放进度"));
@@ -182,6 +197,8 @@ ClassicWindow::ClassicWindow()
     m_tracks = new TrackList(m_list);
     m_list->setModel(m_tracks);
     auto *listDock = addDock(QStringLiteral("playlist"), tr("播放列表"), m_list);
+    listDock->setAcceptDrops(true);
+    listDock->installEventFilter(this);
     auto *lyrics = new QWidget;
     lyrics->setObjectName("lyricPanel");
     auto *lines = new QVBoxLayout(lyrics);
@@ -230,6 +247,12 @@ ClassicWindow::ClassicWindow()
         resizeDocks({listDock, lyricsDock}, {260, 260}, Qt::Horizontal);
     updateState();
     show();
+    auto *magnet = new WindowMagnet(this, listDock, lyricsDock);
+    view->addAction(tr("磁吸排列"), magnet, &WindowMagnet::arrange);
+    if(!settings.contains("Classic/magneticLayout") && !listDock->isFloating() &&
+       !lyricsDock->isFloating() && listDock->isVisible() && lyricsDock->isVisible())
+        magnet->arrange();
+
 }
 
 void ClassicWindow::bindPlaylist(PlayListModel *playlist)
@@ -342,10 +365,28 @@ void ClassicWindow::updateLyrics(qint64 time)
 void ClassicWindow::closeEvent(QCloseEvent *event)
 {
     QSettings settings;
+    settings.setValue("Classic/magneticLayout", true);
     settings.setValue("Classic/geometry", saveGeometry());
     settings.setValue("Classic/docks", saveState());
     QMainWindow::closeEvent(event);
     UiHelper::instance()->exit();
+}
+
+bool ClassicWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if((event->type() == QEvent::DragEnter || event->type() == QEvent::Drop) &&
+       watched == m_list->parentWidget())
+    {
+        auto *drop = static_cast<QDropEvent *>(event);
+        if(m_playlist && drop->mimeData()->hasUrls())
+        {
+            if(event->type() == QEvent::Drop)
+                m_playlist->addPaths(droppedPaths(drop->mimeData()));
+            drop->acceptProposedAction();
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void ClassicWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -356,9 +397,7 @@ void ClassicWindow::dragEnterEvent(QDragEnterEvent *event)
 
 void ClassicWindow::dropEvent(QDropEvent *event)
 {
-    QStringList paths;
-    for(const auto &url : event->mimeData()->urls())
-        paths << (url.isLocalFile() ? url.toLocalFile() : url.toString());
+    const QStringList paths = droppedPaths(event->mimeData());
     if(!paths.isEmpty())
     {
         UiHelper::instance()->replaceAndPlay(paths);

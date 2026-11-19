@@ -19,4 +19,4 @@ Name[ru]=Открыть с помощью Qmmp
 Name[tr]=Qmmp ile aç
 Name[zh_TW]=用Qmmp打開
 Exec=qmmp cdda://%d
-Icon=qmmp
+Icon=qmmp-classic

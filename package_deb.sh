@@ -105,7 +105,7 @@ Depends: $depends
 Maintainer: Ilya Kotov <forkotov02@ya.ru>
 Description: Qt music player with a compact Chinese interface and synchronized lyrics
 CONTROL
-install -Dm644 "$root/qmmq.png" "$usr/share/icons/hicolor/512x512/apps/qmmp.png"
+install -Dm644 "$root/src/app/images/scalable/qmmp-classic.svg" "$usr/share/icons/hicolor/scalable/apps/qmmp-classic.svg"
 dpkg-deb --root-owner-group --build "$pkg" "$work/player.deb"
 mv "$work/player.deb" "$dist/qmmp_${version}_${arch}.deb"
 echo "$dist/qmmp_${version}_${arch}.deb"
