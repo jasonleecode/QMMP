@@ -23,6 +23,7 @@ extern "C"{
 }
 #include <math.h>
 #include <QSettings>
+#include <QElapsedTimer>
 #include "outputpulseaudio.h"
 
 OutputPulseAudio *OutputPulseAudio::instance = nullptr;
@@ -197,12 +198,30 @@ qint64 OutputPulseAudio::latency()
 
 qint64 OutputPulseAudio::writeAudio(unsigned char *data, qint64 maxSize)
 {
-    while(!pa_stream_writable_size(m_stream) || !isReady())
+    QElapsedTimer wait;
+    wait.start();
+    size_t writable = 0;
+    while(isReady())
     {
-        poll();
+        writable = pa_stream_writable_size(m_stream);
+        if(writable == size_t(-1))
+            return -1;
+        if(writable > 0)
+            break;
+        if(wait.elapsed() >= 5000)
+        {
+            qCWarning(plugin, "PulseAudio stream stalled");
+            return -1;
+        }
+        poll(250);
+    }
+    if(!isReady())
+    {
+        qCWarning(plugin, "PulseAudio stream disconnected");
+        return -1;
     }
 
-    size_t length = qMin(size_t(maxSize), pa_stream_writable_size(m_stream));
+    size_t length = qMin(size_t(maxSize), writable);
     if(pa_stream_write(m_stream, data, length, nullptr, 0, PA_SEEK_RELATIVE) < 0)
     {
         qCWarning(plugin, "pa_stream_write failed: %s", pa_strerror(pa_context_errno(m_ctx)));
@@ -280,9 +299,9 @@ bool OutputPulseAudio::isReady() const
             pa_stream_get_state(m_stream) == PA_STREAM_READY;
 }
 
-void OutputPulseAudio::poll()
+void OutputPulseAudio::poll(int timeout)
 {
-    pa_mainloop_prepare(m_loop, -1);
+    pa_mainloop_prepare(m_loop, timeout);
     pa_mainloop_poll(m_loop);
     pa_mainloop_dispatch(m_loop);
 }

@@ -58,7 +58,7 @@ private:
     // helper functions
     void uninitialize();
     bool isReady() const;
-    void poll();
+    void poll(int timeout = -1);
     bool process(pa_operation *op);
     //callbacks
     static void subscribe_cb(pa_context *ctx, pa_subscription_event_type t, uint32_t index, void *data);
