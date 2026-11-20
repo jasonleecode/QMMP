@@ -15,6 +15,7 @@ class ConsoleKey;
 class PlayListModel;
 class TrackList;
 class WindowMagnet;
+class ConsoleTitle;
 
 class ClassicWindow : public QMainWindow
 {
@@ -22,6 +23,7 @@ public:
     ClassicWindow();
     ~ClassicWindow() override;
 protected:
+    void changeEvent(QEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
@@ -47,11 +49,12 @@ private:
     qint64 m_displayPosition = 0;
     std::array<QLabel *,7> m_lines;
     QSlider *m_position;
+    ConsoleTitle *m_titleBar;
     ConsoleKey *m_play;
     QWidget *m_deck, *m_compactBar;
     ConsoleKey *m_compactPlay;
     QLabel *m_compactTitle;
-    QByteArray m_normalGeometry, m_normalDocks;
+    QByteArray m_normalGeometry, m_normalDocks, m_minimizedDocks;
     QRect m_normalRect;
     QListView *m_list;
     QListWidget *m_collections;

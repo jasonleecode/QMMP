@@ -221,6 +221,8 @@ void QmmpAudioEngine::seek(qint64 time)
             mutex()->lock ();
             m_seekTime = time;
             mutex()->unlock();
+            QMutexLocker lock(m_output->recycler()->mutex());
+            m_output->recycler()->cond()->wakeAll();
         }
     }
 }
@@ -406,6 +408,11 @@ void QmmpAudioEngine::run()
         len = m_decoder->read((m_output_buf + m_output_at), m_output_size - m_output_at);
         mutex()->lock();
 
+        if(m_seekTime >= 0)
+        {
+            mutex()->unlock();
+            continue;
+        }
         if (len > 0)
         {
             m_bitrate = m_decoder->bitrate();
@@ -485,7 +492,7 @@ void QmmpAudioEngine::run()
                 flush(true);
                 m_output->recycler()->mutex()->lock ();
                 // end of stream
-                while (!m_output->recycler()->empty() && !m_user_stop)
+                while (!m_output->recycler()->empty() && !m_user_stop && m_seekTime < 0)
                 {
                     m_output->recycler()->cond()->wakeOne();
                     mutex()->unlock();
@@ -496,7 +503,7 @@ void QmmpAudioEngine::run()
             }
 
             //continue if new input was queued
-            if(m_decoders.isEmpty() || m_user_stop)
+            if((m_seekTime < 0 && m_decoders.isEmpty()) || m_user_stop)
             {
                 m_done = true;
                 m_finish = !m_user_stop;
@@ -541,7 +548,7 @@ void QmmpAudioEngine::flush(bool final)
 
         while ((m_output->recycler()->full() || m_output->recycler()->blocked()) && (!m_done && !m_finish))
         {
-            if(m_seekTime > 0)
+            if(m_seekTime >= 0)
             {
                 m_output_at = 0;
                 m_output->recycler()->mutex()->unlock ();

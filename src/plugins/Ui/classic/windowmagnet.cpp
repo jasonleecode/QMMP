@@ -107,6 +107,7 @@ void WindowMagnet::arrange()
 
 void WindowMagnet::setSuspended(bool suspend)
 {
+    dragging = false;
     suspended = suspend;
     adjusting = false;
     if(!suspend)
@@ -115,7 +116,7 @@ void WindowMagnet::setSuspended(bool suspend)
 
 bool WindowMagnet::eventFilter(QObject *object, QEvent *event)
 {
-    if(!suspended && !adjusting && !windows[0]->isMaximized() && !windows[0]->isMinimized())
+    if(!dragging && !suspended && !adjusting && !windows[0]->isMaximized() && !windows[0]->isMinimized())
     {
         for(int i = 0; i < windows.size(); ++i)
         {
@@ -125,7 +126,7 @@ bool WindowMagnet::eventFilter(QObject *object, QEvent *event)
             if(event->type() == QEvent::Move && w->isWindow() && w->isVisible() &&
                frames[i].isValid() && w->frameGeometry().topLeft() != frames[i].topLeft())
             {
-                follow(i);
+                follow(i, w->frameGeometry().topLeft());
             }
             else if(i == 0 && event->type() == QEvent::Resize && frames[0].isValid())
             {
@@ -161,7 +162,34 @@ bool WindowMagnet::eventFilter(QObject *object, QEvent *event)
     return QObject::eventFilter(object, event);
 }
 
-void WindowMagnet::follow(int source)
+bool WindowMagnet::beginGroupDrag()
+{
+    if(suspended || adjusting || windows[0]->isMaximized())
+        return false;
+    remember();
+    QPoint shift;
+    for(int i = 1; i < frames.size(); ++i)
+        if(frames[i].isValid() && join(frames[0], frames[i], 1, shift))
+        {
+            dragging = true;
+            return true;
+        }
+    return false;
+}
+
+void WindowMagnet::moveGroup(QPoint position)
+{
+    if(dragging)
+        follow(0, position);
+}
+
+void WindowMagnet::endGroupDrag()
+{
+    dragging = false;
+    remember();
+}
+
+void WindowMagnet::follow(int source, QPoint position)
 {
     adjusting = true;
     QList<bool> group(windows.size(), false);
@@ -175,7 +203,7 @@ void WindowMagnet::follow(int source)
                     if(group[j] && !group[i] && frames[i].isValid() &&
                        join(frames[i], frames[j], 1, shift))
                         group[i] = true;
-    QPoint delta = windows[source]->frameGeometry().topLeft() - frames[source].topLeft();
+    QPoint delta = position - frames[source].topLeft();
     QPoint snap;
     int best = std::numeric_limits<int>::max();
     int target = -1, member = -1;
@@ -212,6 +240,7 @@ void WindowMagnet::follow(int source)
         else if(before.right() + 1 == anchor.left())
             panel->move(anchor.left() - panel->frameGeometry().width(), before.top());
     }
-    remember();
+    if(!dragging)
+        remember();
     adjusting = false;
 }

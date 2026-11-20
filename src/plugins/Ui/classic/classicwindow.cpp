@@ -186,8 +186,20 @@ ClassicWindow::ClassicWindow()
     connect(core,&SoundCore::elapsedChanged,this,&ClassicWindow::updatePosition);
     connect(core,&SoundCore::stateChanged,this,&ClassicWindow::updateState);
     auto *helper = UiHelper::instance();
-    connect(helper,&UiHelper::toggleVisibilityCalled,this,[this] { setVisible(!isVisible()); });
-    connect(helper,&UiHelper::showMainWindowCalled,this,[this] { show(); raise(); activateWindow(); });
+    auto showPlayer = [this] {
+        if(isMinimized())
+            setWindowState(windowState() & ~Qt::WindowMinimized);
+        show();
+        raise();
+        activateWindow();
+    };
+    connect(helper,&UiHelper::toggleVisibilityCalled,this,[this, showPlayer] {
+        if(isMinimized() || !isVisible())
+            showPlayer();
+        else
+            hide();
+    });
+    connect(helper,&UiHelper::showMainWindowCalled,this,showPlayer);
 
     QSettings settings;
     const bool saved = settings.contains("Classic/consoleDocks");
@@ -207,6 +219,7 @@ ClassicWindow::ClassicWindow()
     updateState();
     show();
     m_magnet = std::make_unique<WindowMagnet>(this, panels);
+    m_titleBar->setWindowMagnet(m_magnet.get());
     m_view->addAction(tr("磁吸排列"), m_magnet.get(), &WindowMagnet::arrange);
     if(!saved)
         m_magnet->arrange();
@@ -273,9 +286,9 @@ QWidget *ClassicWindow::createDeck()
     auto *outer = new QVBoxLayout(deck);
     outer->setContentsMargins(2,1,2,2);
     outer->setSpacing(1);
-    auto *titleBar = new ConsoleTitle(tr("Qmmp 静听"), this, m_menu);
-    connect(titleBar, &ConsoleTitle::compactRequested, this, [this] { setCompactMode(true); });
-    outer->addWidget(titleBar);
+    m_titleBar = new ConsoleTitle(tr("Qmmp 静听"), this, m_menu);
+    connect(m_titleBar, &ConsoleTitle::compactRequested, this, [this] { setCompactMode(true); });
+    outer->addWidget(m_titleBar);
     auto *inner = new QVBoxLayout;
     inner->setContentsMargins(6,0,6,0);
     inner->setSpacing(2);
@@ -345,6 +358,7 @@ QWidget *ClassicWindow::createDeck()
     m_position->setAccessibleName(tr("播放进度"));
     m_position->setRange(0,10000);
     m_position->setTracking(false);
+    connect(m_position,&QSlider::sliderMoved,this,[this](int) { updatePosition(m_displayPosition); });
     connect(m_position,&QSlider::valueChanged,this,[=](int value) {
         const qint64 time = core->duration()*value/m_position->maximum();
         core->seek(time);
@@ -659,14 +673,16 @@ void ClassicWindow::updateTrack()
 
 void ClassicWindow::updatePosition(qint64 time)
 {
-    m_displayPosition = time;
     const qint64 duration = m_path.isEmpty() ? 0 : SoundCore::instance()->duration();
     m_position->setEnabled(duration > 0);
-    if(!m_position->isSliderDown())
+    if(m_position->isSliderDown() && duration > 0)
+        time = duration * m_position->sliderPosition() / m_position->maximum();
+    else
     {
         QSignalBlocker block(m_position);
         m_position->setValue(duration > 0 ? time * m_position->maximum() / duration : 0);
     }
+    m_displayPosition = time;
     const QString elapsed = timeLabel(time);
     QString display = elapsed.rightJustified(5, QLatin1Char('0'));
     if(m_showRemaining && !m_path.isEmpty())
@@ -695,11 +711,35 @@ void ClassicWindow::updateLyrics(qint64 time)
                             m_lyrics.textAt(line+i-middle));
 }
 
+void ClassicWindow::changeEvent(QEvent *event)
+{
+    if(event->type() == QEvent::WindowStateChange && m_magnet)
+    {
+        const bool wasMinimized = static_cast<QWindowStateChangeEvent *>(event)->oldState().testFlag(Qt::WindowMinimized);
+        if(isMinimized() && !wasMinimized)
+        {
+            m_magnet->setSuspended(true);
+            m_minimizedDocks = saveState();
+            for(auto *dock : {m_eqDock, m_playlistDock, m_lyricsDock})
+                if(dock->isFloating())
+                    dock->hide();
+        }
+        else if(wasMinimized && !isMinimized() && !m_minimizedDocks.isEmpty())
+        {
+            restoreState(m_minimizedDocks);
+            m_minimizedDocks.clear();
+            m_magnet->setSuspended(!m_normalGeometry.isEmpty());
+        }
+    }
+    QMainWindow::changeEvent(event);
+}
+
 void ClassicWindow::closeEvent(QCloseEvent *event)
 {
     QSettings settings;
     settings.setValue("Classic/consoleGeometry", m_normalGeometry.isEmpty() ? saveGeometry() : m_normalGeometry);
-    settings.setValue("Classic/consoleDocks", m_normalDocks.isEmpty() ? saveState() : m_normalDocks);
+    QByteArray docks = m_normalDocks.isEmpty() ? m_minimizedDocks : m_normalDocks;
+    settings.setValue("Classic/consoleDocks", docks.isEmpty() ? saveState() : docks);
     QMainWindow::closeEvent(event);
     UiHelper::instance()->exit();
 }

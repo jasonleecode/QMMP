@@ -27,20 +27,16 @@
 #include <QAudioSink>
 #include <QMediaDevices>
 #include <QSettings>
-#include <unistd.h>
+#include <QCoreApplication>
+#include <QThread>
 
 
-OutputQtMultimedia::OutputQtMultimedia() : Output(), m_buffer(nullptr)
+OutputQtMultimedia::OutputQtMultimedia() : Output()
 {
 }
 
 OutputQtMultimedia::~OutputQtMultimedia()
 {
-    if(m_output && m_control)
-        QMetaObject::invokeMethod(m_control, "stop", Qt::QueuedConnection);
-
-    if(m_output)
-        m_output->deleteLater();
     if(m_control)
         m_control->deleteLater();
 }
@@ -118,10 +114,18 @@ bool OutputQtMultimedia::initialize(quint32 freq, ChannelMap map, Qmmp::AudioFor
 
     qCDebug(plugin) << "using output device: " << device_info.description();
 
-    m_output = new QAudioSink(device_info, qformat);
+    m_control = new OutputControl;
+    m_output = m_control->output = new QAudioSink(device_info, qformat, m_control);
     m_output->setBufferSize(4096);
-    m_buffer = m_output->start();
-    m_control = new OutputControl(m_output);
+    m_control->buffer = m_output->start();
+    if(!m_control->buffer)
+        return false;
+
+    // A format change can initialize the sink on the decoder thread, which has no event loop.
+    auto *controlThread = QCoreApplication::instance()->thread();
+    if(!m_control->buffer->parent())
+        m_control->buffer->moveToThread(controlThread);
+    m_control->moveToThread(controlThread);
 
     configure(freq, map, format);
     return true;
@@ -130,28 +134,38 @@ bool OutputQtMultimedia::initialize(quint32 freq, ChannelMap map, Qmmp::AudioFor
 
 qint64 OutputQtMultimedia::latency()
 {
-    return (m_output->bufferSize() - m_output->bytesFree()) * 1000 / sampleSize() / channels() / sampleRate();
+    if(m_control->restarting || !m_control->buffer)
+        return 0;
+    return qMax<qint64>(0, m_output->bufferSize() - m_output->bytesFree()) * 1000 / m_bytes_per_second;
 }
 
 qint64 OutputQtMultimedia::writeAudio(unsigned char *data, qint64 maxSize)
 {
-    if (!m_output->bytesFree()) {
-        //If the buffer is full, waiting for some bytes to be played:
-        //trying to play maxSize bytes, but not more than half of buffer.
-        usleep(qMin(maxSize, static_cast<qint64>(m_output->bufferSize() / 2)) * 1000000 / m_bytes_per_second);
+    if(!m_control->restarting)
+    {
+        if(!m_control->buffer || m_output->state() == QAudio::StoppedState)
+            return -1;
+        const qint64 frame = sampleSize() * channels();
+        const qint64 available = qMin<qint64>(m_output->bytesFree(), maxSize);
+        if(available >= frame)
+            return m_control->buffer->write(reinterpret_cast<const char *>(data), available / frame * frame);
     }
 
-    return m_buffer->write((const char*)data, maxSize);
+    // Some push devices accept more than bytesFree() and queue the excess for seconds.
+    // Yield to the sink and let the writer check for pause or seek before trying again.
+    QThread::usleep(qBound(1000LL, maxSize * 500000 / m_bytes_per_second, 10000LL));
+    return 0;
 }
 
 void OutputQtMultimedia::drain()
 {
-    m_buffer->waitForBytesWritten(-1);
+    QThread::msleep(latency());
 }
 
 void OutputQtMultimedia::reset()
 {
-    m_buffer->reset();
+    if(!m_control->restarting.exchange(true))
+        QMetaObject::invokeMethod(m_control, &OutputControl::restart, Qt::QueuedConnection);
 }
 
 void OutputQtMultimedia::suspend()
@@ -164,20 +178,19 @@ void OutputQtMultimedia::resume()
     QMetaObject::invokeMethod(m_control, "resume", Qt::QueuedConnection);
 }
 
-OutputControl::OutputControl(QAudioSink *o) : m_output(o)
-{}
-
 void OutputControl::suspend()
 {
-    m_output->suspend();
+    output->suspend();
 }
 
 void OutputControl::resume()
 {
-    m_output->resume();
+    output->resume();
 }
 
-void OutputControl::stop()
+void OutputControl::restart()
 {
-    m_output->stop();
+    output->reset();
+    buffer = output->start();
+    restarting = false;
 }

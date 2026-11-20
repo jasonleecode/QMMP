@@ -6,6 +6,7 @@
 
 class QHBoxLayout;
 class QMenu;
+class WindowMagnet;
 class SpectrumDisplay final : public QWidget
 {
 public:
@@ -34,11 +35,14 @@ class WindowDragArea : public QWidget
 {
 public:
     explicit WindowDragArea(QWidget *parent, bool draggable = true);
+    void setWindowMagnet(WindowMagnet *magnet) { m_magnet = magnet; }
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
 private:
+    WindowMagnet *m_magnet = nullptr;
+    bool m_groupDrag = false;
     bool m_draggable;
     bool m_manualDrag = false;
     QPoint m_offset;

@@ -1,4 +1,6 @@
 #include "consolecontrols.h"
+#include "windowmagnet.h"
+#include <QGuiApplication>
 #include <QDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -202,7 +204,8 @@ void WindowDragArea::mousePressEvent(QMouseEvent *e)
     {
         auto *owner = window();
         m_offset = e->globalPosition().toPoint() - owner->frameGeometry().topLeft();
-        m_manualDrag = !owner->windowHandle() || !owner->windowHandle()->startSystemMove();
+        m_groupDrag = m_magnet && !QGuiApplication::platformName().startsWith("wayland") && m_magnet->beginGroupDrag();
+        m_manualDrag = m_groupDrag || !owner->windowHandle() || !owner->windowHandle()->startSystemMove();
         e->accept();
     }
     else e->ignore(); // QDockWidget handles dragging its custom title bar.
@@ -210,13 +213,24 @@ void WindowDragArea::mousePressEvent(QMouseEvent *e)
 void WindowDragArea::mouseMoveEvent(QMouseEvent *e)
 {
     if(m_manualDrag && !window()->isMaximized() && e->buttons().testFlag(Qt::LeftButton))
-        window()->move(e->globalPosition().toPoint() - m_offset);
+    {
+        const QPoint target = e->globalPosition().toPoint() - m_offset;
+        if(m_groupDrag)
+            m_magnet->moveGroup(target);
+        else
+            window()->move(target);
+    }
     else e->ignore();
 }
 void WindowDragArea::mouseReleaseEvent(QMouseEvent *e)
 {
     if(e->button() == Qt::LeftButton)
+    {
+        if(m_groupDrag)
+            m_magnet->endGroupDrag();
+        m_groupDrag = false;
         m_manualDrag = false;
+    }
     QWidget::mouseReleaseEvent(e);
 }
 void ConsoleTitle::mouseDoubleClickEvent(QMouseEvent *e)

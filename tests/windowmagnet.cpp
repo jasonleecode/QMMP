@@ -45,6 +45,18 @@ int main(int argc, char **argv)
     moveBelow(lyrics, playlist);
     if(!stacked(playlist, lyrics))
         return fail("Lyrics did not match the playlist");
+    if(!magnet.beginGroupDrag())
+        return fail("Attached panels were not picked up for dragging");
+    const QPoint start = player.frameGeometry().topLeft();
+    for(QPoint offset : {QPoint(35, 6), QPoint(-12, 19), QPoint(8, -7)})
+    {
+        magnet.moveGroup(start + offset);
+        if(player.frameGeometry().topLeft() != start + offset ||
+           !stacked(player, playlist) || !stacked(playlist, lyrics))
+            return fail("The floating stack separated during a drag");
+        app.processEvents();
+    }
+    magnet.endGroupDrag();
     player.resize(450, player.height());
     app.processEvents();
     if(!stacked(player, playlist) || !stacked(playlist, lyrics))

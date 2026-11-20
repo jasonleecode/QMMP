@@ -24,6 +24,7 @@
 #include <qmmp/output.h>
 #include <QAudioSink>
 #include <QObject>
+#include <atomic>
 
 /**
     @author Ivan Ponomarev ivantrue@gmail.com
@@ -49,7 +50,6 @@ public:
 private:
     QAudioSink *m_output = nullptr;
     OutputControl *m_control = nullptr;
-    QIODevice *m_buffer;
     qint64 m_bytes_per_second = 0;
 };
 
@@ -58,15 +58,14 @@ class OutputControl : public QObject
     Q_OBJECT
 
 public:
-    explicit OutputControl(QAudioSink *o);
+    QAudioSink *output = nullptr;
+    QIODevice *buffer = nullptr;
+    std::atomic_bool restarting{false};
 
 public slots:
     void suspend();
     void resume();
-    void stop();
-
-private:
-    QAudioSink *m_output;
+    void restart();
 
 };
 

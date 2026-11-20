@@ -184,10 +184,20 @@ int main(int argc, char **argv)
     auto *core = SoundCore::instance();
     CHECK(waitFor([&] { return core->state() == Qmmp::Playing && current->text() == "春天"; }));
     CHECK(list->currentIndex().row() == 0 && title->text() == "春天");
+    auto *seek = window->findChild<QSlider *>("progress");
+    auto *clock = window->findChild<QLabel *>("clock");
+    CHECK(seek && clock);
+    seek->setSliderDown(true);
+    seek->setSliderPosition(7500);
+    CHECK(clock->text() == "00:06" && current->text() == "春天");
+    const qint64 beforeDrag = core->elapsed();
+    CHECK(waitFor([&] { return core->elapsed() > beforeDrag + 250; }));
+    CHECK(core->elapsed() < 3000 && clock->text() == "00:06" && seek->sliderPosition() == 7500);
+    seek->setSliderDown(false);
+    CHECK(waitFor([&] { return core->elapsed() >= 6500; }));
     core->seek(4200);
     CHECK(waitFor([&] { return current->text() == "窗外的光，落在琴弦上"; }));
-    auto *clock = window->findChild<QLabel *>("clock");
-    CHECK(clock && clock->text() == "00:04");
+    CHECK(clock->text() == "00:04");
     auto *mute = window->findChild<QToolButton *>("mute");
     CHECK(mute && !mute->isChecked());
     mute->click();
@@ -198,8 +208,6 @@ int main(int argc, char **argv)
     CHECK(waitFor([&] { return core->state() == Qmmp::Paused; }));
     clickWidget(clock);
     CHECK(clock->text() == "-00:05" && core->state() == Qmmp::Paused);
-    auto *seek = window->findChild<QSlider *>("progress");
-    CHECK(seek);
     seek->setValue(seek->maximum() / 2);
     CHECK(clock->text() == "-00:05");
     seek->setValue(3 * seek->maximum() / 4);
@@ -376,9 +384,13 @@ int main(int argc, char **argv)
     CHECK(waitFor([&] { return !bar->isVisible() && window->frameGeometry() == mainFrame &&
                                listDock->frameGeometry() == listFrame && listDock->isVisible() && eqDock->isVisible(); }));
     CHECK(!lyricDock->isVisible());
+    minimize->click();
+    CHECK(window->isMinimized() && !listDock->isVisible() && !eqDock->isVisible());
+    window->showNormal();
+    CHECK(eqDock->isVisible() && listDock->isVisible() && !lyricDock->isVisible());
     lyricDock->show();
     minimize->click();
-    CHECK(window->isMinimized());
+    CHECK(window->isMinimized() && !listDock->isVisible() && !lyricDock->isVisible());
     window->showNormal();
     CHECK(waitFor([&] { return eqDock->y() == window->frameGeometry().bottom()+1 &&
                                listDock->y() == eqDock->frameGeometry().bottom()+1 &&
