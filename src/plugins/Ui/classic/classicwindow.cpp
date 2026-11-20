@@ -138,6 +138,7 @@ ClassicWindow::ClassicWindow()
     pages->addWidget(m_compactBar);
     m_compactBar->hide();
     setCentralWidget(console);
+    installClassicSkins(this, m_skinMenu);
     auto *core = SoundCore::instance();
     auto *manager = PlayListManager::instance();
     bindPlaylist(manager->selectedPlayList());
@@ -170,7 +171,7 @@ ClassicWindow::ClassicWindow()
     const bool saved = settings.contains("Classic/consoleDocks");
     for(auto *dock : panels)
         dock->setFloating(true);
-    resize(396,238);
+    resize(396,m_preferredHeight);
     if(saved)
     {
         restoreGeometry(settings.value("Classic/consoleGeometry").toByteArray());
@@ -226,7 +227,7 @@ void ClassicWindow::createMenus()
         dialog.exec();
     });
     m_view = m_menu->addMenu(tr("视图"));
-    installClassicSkins(this, m_menu->addMenu(tr("皮肤")));
+    m_skinMenu = m_menu->addMenu(tr("皮肤"));
     auto *tools = m_menu->addMenu(tr("工具"));
     helper->registerMenu(UiHelper::TOOLS_MENU,tools,true);
     m_menu->addSeparator();
@@ -266,6 +267,7 @@ QWidget *ClassicWindow::createDeck()
     connect(m_titleBar, &ConsoleTitle::compactRequested, this, [this] { setCompactMode(true); });
     outer->addWidget(m_titleBar);
     auto *inner = new QVBoxLayout;
+    inner->setObjectName("screenStack");
     inner->setContentsMargins(6,0,6,0);
     inner->setSpacing(2);
     outer->addLayout(inner,1);
@@ -294,9 +296,21 @@ QWidget *ClassicWindow::createDeck()
     auto *right = new QVBoxLayout;
     screen->addLayout(right,2);
     m_status = new QLabel(display);
+    m_status->setObjectName("playbackState");
     m_status->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     right->addWidget(m_status);
-    auto *audio = new QHBoxLayout;
+    right->setObjectName("displayControls");
+    m_volumeReadout = new QLabel(display);
+    m_volumeReadout->setObjectName("volumeReadout");
+    m_volumeReadout->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    auto showVolume = [this](int value) { m_volumeReadout->setText(tr("音量  %1%").arg(value)); };
+    showVolume(core->volume());
+    connect(core, &SoundCore::volumeChanged, m_volumeReadout, showVolume);
+    right->addWidget(m_volumeReadout);
+    m_volumeReadout->hide();
+    m_audioControls = new QWidget(display);
+    auto *audio = new QHBoxLayout(m_audioControls);
+    audio->setContentsMargins(0,0,0,0);
     auto *mute = new ConsoleKey(ConsoleKey::Speaker,tr("静音"),display);
     mute->setObjectName("mute");
     mute->setFixedSize(22,18);
@@ -312,8 +326,10 @@ QWidget *ClassicWindow::createDeck()
     connect(volume,&QSlider::valueChanged,core,&SoundCore::setVolume);
     connect(core,&SoundCore::volumeChanged,volume,&QSlider::setValue);
     audio->addWidget(volume);
-    right->addLayout(audio);
-    auto *switches = new QHBoxLayout;
+    right->addWidget(m_audioControls);
+    m_panelSwitches = new QWidget(display);
+    auto *switches = new QHBoxLayout(m_panelSwitches);
+    switches->setContentsMargins(0,0,0,0);
     for(auto *dock : {m_playlistDock,m_eqDock,m_lyricsDock})
     {
         auto *key = new QToolButton(display);
@@ -327,7 +343,7 @@ QWidget *ClassicWindow::createDeck()
         key->setObjectName("consoleKey");
         switches->addWidget(key);
     }
-    right->addLayout(switches);
+    right->addWidget(m_panelSwitches);
     inner->addWidget(display,1);
     m_position = new QSlider(Qt::Horizontal,deck);
     m_position->setObjectName("progress");
@@ -376,6 +392,66 @@ QWidget *ClassicWindow::createDeck()
     return deck;
 }
 
+void ClassicWindow::applySkinLayout(const SkinLayout &skin)
+{
+    auto *readout = qobject_cast<QHBoxLayout *>(m_clock->parentWidget()->layout());
+    readout->insertWidget(skin.clockLeft ? 0 : 1, m_clock);
+    auto *playlist = qobject_cast<QVBoxLayout *>(m_playlistDock->widget()->layout());
+    playlist->setDirection(skin.toolsBottom ? QBoxLayout::BottomToTop : QBoxLayout::TopToBottom);
+    auto *screenStack = m_deck->findChild<QVBoxLayout *>("screenStack");
+    screenStack->setContentsMargins(skin.screenMargin, 0, skin.screenMargin, 0);
+    screenStack->setSpacing(skin.screenSpacing);
+    auto *transport = m_play->parentWidget();
+    auto *keys = qobject_cast<QHBoxLayout *>(transport->layout());
+    auto *library = transport->findChild<QToolButton *>("libraryKey");
+    for(auto *key : transport->findChildren<QToolButton *>(QString(), Qt::FindDirectChildrenOnly))
+    {
+        if(key->objectName() != "round" && key != m_play)
+            continue;
+        key->setFixedSize(key == m_play ? QSize(skin.playWidth, skin.playHeight) : QSize(skin.keyWidth, skin.keyHeight));
+        key->setProperty("flatTransport", skin.flatKeys);
+    }
+    library->setText(skin.libraryText.isEmpty() ? tr("♫ 音乐窗") : skin.libraryText);
+    library->setFixedSize(skin.libraryWidth, skin.libraryHeight);
+    keys->setSpacing(skin.keySpacing);
+    auto *controls = m_deck->findChild<QVBoxLayout *>("displayControls");
+    keys->removeWidget(m_audioControls);
+    keys->removeWidget(m_panelSwitches);
+    if(skin.volumeInTransport)
+        keys->insertWidget(keys->indexOf(library), m_audioControls);
+    else
+        controls->addWidget(m_audioControls);
+    if(skin.switchesInTransport)
+        keys->insertWidget(0, m_panelSwitches);
+    else
+        controls->addWidget(m_panelSwitches);
+    m_audioControls->setMaximumWidth(skin.volumeWidth);
+    m_audioControls->show();
+    m_panelSwitches->show();
+    m_volumeReadout->setVisible(skin.volumeReadout);
+
+    for(auto *key : findChildren<ConsoleKey *>())
+        key->setSkinIcons(skin.icons);
+    const QIcon emblem(skin.emblem.isEmpty() ? QStringLiteral(":/classic/player.svg") : skin.emblem);
+    auto *medallion = m_titleBar->findChild<QToolButton *>("medallion");
+    medallion->setIcon(skin.emblem.isEmpty() ? QIcon() : emblem);
+    medallion->setText(skin.emblem.isEmpty() ? QStringLiteral("♫") : QString());
+    m_compactBar->findChild<QLabel *>("compactEmblem")->setPixmap(emblem.pixmap(QSize(21,21), devicePixelRatioF()));
+    m_titleBar->findChild<QLabel *>("caption")->setText(skin.mainCaption.isEmpty() ? tr("Qmmp 静听") : skin.mainCaption);
+    const auto caption = [](QDockWidget *dock, const QString &name) {
+        dock->titleBarWidget()->findChild<QLabel *>("caption")->setText(name.isEmpty() ? dock->windowTitle() : name);
+    };
+    caption(m_eqDock, skin.eqCaption);
+    caption(m_playlistDock, skin.playlistCaption);
+    caption(m_lyricsDock, skin.lyricsCaption);
+    if(m_magnet && isVisible() && m_normalGeometry.isEmpty() && !isMaximized() && !isMinimized() &&
+       height() == m_preferredHeight && height() != skin.mainHeight)
+        resize(width(), skin.mainHeight);
+    m_preferredHeight = skin.mainHeight;
+    m_playlistDock->setProperty("stackHeight", skin.playlistHeight);
+    m_lyricsDock->setProperty("stackHeight", skin.lyricsHeight);
+}
+
 QWidget *ClassicWindow::createCompactBar()
 {
     auto *bar = new WindowDragArea(this);
@@ -384,6 +460,7 @@ QWidget *ClassicWindow::createCompactBar()
     row->setContentsMargins(4, 3, 4, 3);
     row->setSpacing(2);
     auto *icon = new QLabel(bar);
+    icon->setObjectName("compactEmblem");
     icon->setAttribute(Qt::WA_TransparentForMouseEvents);
     icon->setPixmap(QIcon(":/classic/player.svg").pixmap(QSize(21, 21), devicePixelRatioF()));
     row->addWidget(icon);

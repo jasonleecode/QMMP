@@ -1,6 +1,7 @@
 #ifndef CONSOLECONTROLS_H
 #define CONSOLECONTROLS_H
 #include <QToolButton>
+#include <QHash>
 #include <QWidget>
 #include <QPixmap>
 
@@ -21,14 +22,17 @@ private:
 
 class ConsoleKey final : public QToolButton
 {
+    Q_OBJECT
 public:
     enum Glyph { Play, Pause, Stop, Previous, Next, Eject, Minimize, Compact, Restore, Close, Speaker, Sequential, Shuffle };
     ConsoleKey(Glyph glyph, const QString &label, QWidget *parent);
     void setGlyph(Glyph glyph);
+    void setSkinIcons(const QHash<QString, QIcon> &icons);
 protected:
     void paintEvent(QPaintEvent *) override;
 private:
     Glyph m_glyph;
+    QHash<QString, QIcon> m_icons;
 };
 
 class WindowDragArea : public QWidget

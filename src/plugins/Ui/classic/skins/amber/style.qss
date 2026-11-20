@@ -1,0 +1,98 @@
+/* Blue anodised cases and an amber LCD, shared by the four modules. */
+QMainWindow#ClassicWindow, QDockWidget {
+    background:#071b25; border:2px solid #07131c; border-top-color:#2c4f61; border-left-color:#264654;
+}
+QWidget#deck, QWidget#panelBody {
+    background:#0a202b;
+}
+QWidget#chrome, QWidget#compactBar {
+    border:1px solid #0a1f2d; border-top-color:#608699; border-left-color:#456d7d;
+    background:qlineargradient(x1:0,y1:0,x2:0.1,y2:1,stop:0 #245065,stop:.12 #1c4356,stop:.65 #123549,stop:1 #0d2737);
+}
+QWidget#chrome QLabel#caption {
+    color:#d2dddb; font-family:"DejaVu Sans",sans-serif; font-size:10px; font-weight:bold; letter-spacing:1px;
+}
+QWidget#chrome QToolButton, QToolButton#consoleKey {
+    color:#bbd0d4; border:1px solid #0b2532; border-top-color:#4a7080; border-radius:2px;
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #31566a,stop:.46 #244758,stop:1 #102d3d);
+}
+QWidget#chrome QToolButton#medallion { background:transparent; border:none; }
+QWidget#readout {
+    border:0; border-top:2px solid #b49446; border-left:1px solid #997a38; border-right:1px solid #997a38; border-radius:0;
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffe991,stop:.25 #ffe382,stop:1 #ffdc70);
+}
+QWidget#readout QLabel#clock { color:#62431c; font:bold 19px "DejaVu Sans Mono"; letter-spacing:-1px; }
+QWidget#readout QLabel#song { color:#694820; font-size:14px; font-weight:normal; }
+QWidget#display {
+    border:0; border-left:1px solid #997a38; border-right:1px solid #997a38;
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffdc70,stop:.28 #ffd15c,stop:.7 #f2b147,stop:1 #e4913c);
+}
+QWidget#display QLabel { color:#69451d; font-size:12px; font-weight:normal; }
+QWidget#display QLabel#volumeReadout { font-weight:bold; }
+QSlider#progress { background:#ce8138; padding:0 3px; }
+QSlider#progress::groove:horizontal {
+    height:4px; border:1px solid #6c4925; background:#945c2f; border-radius:1px;
+}
+QSlider#progress::sub-page:horizontal { background:#ffe08a; }
+QSlider#progress::handle:horizontal {
+    width:18px; margin:-3px 0; border:1px solid #353e3c; border-radius:2px;
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #92a6a1,stop:.42 #45616b,stop:.5 #19323e,stop:1 #142c39);
+}
+QWidget#transport {
+    border:0; border-image:url("@SKIN_DIR@/transport.svg") 0 0 0 0 stretch stretch;
+}
+QWidget#transport QToolButton { color:#c0cfd0; }
+QWidget#transport QToolButton#play, QWidget#transport QToolButton#round {
+    border:1px solid transparent; border-radius:2px; background:transparent;
+}
+QWidget#transport QToolButton#play:hover, QWidget#transport QToolButton#round:hover {
+    border-color:#557480; background:#28424c;
+}
+QWidget#transport QToolButton#play:pressed, QWidget#transport QToolButton#round:pressed { background:#72552e; }
+QWidget#transport QToolButton#consoleKey {
+    min-width:17px; padding:0 1px; border:0; background:transparent; color:#79929b; font-size:9px;
+}
+QWidget#transport QToolButton#consoleKey:checked { color:#f5d182; }
+QWidget#transport QToolButton#libraryKey, QWidget#transport QToolButton#mute {
+    color:#d2c292; background:#10232c; border:1px solid #364952; border-radius:2px; font-size:10px;
+}
+QWidget#transport QSlider::sub-page:horizontal { background:#d9bd6c; }
+QWidget#eqBody, QWidget#lyricPanel {
+    border:1px solid #071824; border-top-color:#365665;
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #123748,stop:.28 #103344,stop:1 #0d2938);
+}
+QWidget#eqBody QSlider::groove:vertical {
+    width:7px; border:1px solid #345160; border-radius:3px;
+    background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #081822,stop:.5 #1b2b32,stop:1 #0d2631);
+}
+QWidget#eqBody QSlider::add-page:vertical {
+    border-radius:2px; background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #73552f,stop:.48 #cfab64,stop:1 #493b2b);
+}
+QWidget#eqBody QSlider::handle:vertical {
+    height:10px; margin:0 -1px; border:1px solid #584936; border-top-color:#efcf84; border-radius:2px;
+    background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #755538,stop:.52 #e4c07b,stop:1 #685338);
+}
+QListView#tracks, QListWidget#collections {
+    color:#593d20; border:0; font-size:13px; selection-color:#37260f; selection-background-color:#e9aa45;
+    background:qlineargradient(x1:0,y1:0,x2:0.12,y2:1,stop:0 #ffe58b,stop:.38 #ffda72,stop:1 #f6c351);
+}
+QListView#tracks::item:selected, QListWidget#collections::item:selected { color:#37260f; background:#eeb34f; }
+QDockWidget#playlist QSplitter::handle { background:#cb9643; }
+QWidget#listTools {
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #634b32,stop:.12 #293b43,stop:.45 #13252e,stop:1 #08161e);
+    border-top:1px solid #d2ae75;
+}
+QWidget#listTools QToolButton {
+    color:#b6c4c5; background:transparent; border:0; border-right:1px solid #334650; font-size:13px;
+}
+QWidget#listTools QToolButton:hover, QWidget#listTools QToolButton:checked { background:#34505a; color:#ffe39d; }
+QWidget#lyricPanel QLabel#activeLyric { color:#d1e3df; font-size:15px; font-weight:normal; }
+QWidget#lyricPanel QLabel#nearLyric, QWidget#eqBody QLabel#eqMark { color:#829eaa; }
+QWidget#compactBar QToolButton {
+    color:#c9dbdc; border:1px solid #04131d; border-top-color:#62818c; border-radius:10px;
+    background:qradialgradient(cx:.46,cy:.23,radius:.83,fx:.46,fy:.18,stop:0 #66848c,stop:.37 #35535d,stop:.54 #163441,stop:1 #081621);
+}
+QWidget#compactBar QToolButton:hover { border-color:#e2c78b; }
+QWidget#compactBar QToolButton:pressed { background:#274754; }
+
+QLabel#compactTitle { qproperty-backlight:#ffd267; qproperty-ink:#60401a; }

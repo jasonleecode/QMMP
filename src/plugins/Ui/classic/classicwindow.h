@@ -5,6 +5,7 @@
 #include <memory>
 #include "syncedlyrics.h"
 
+struct SkinLayout;
 class QLabel;
 class QMenu;
 class QDockWidget;
@@ -23,6 +24,7 @@ class ClassicWindow : public QMainWindow
 public:
     ClassicWindow();
     ~ClassicWindow() override;
+    void applySkinLayout(const SkinLayout &skin);
 protected:
     void changeEvent(QEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
@@ -45,7 +47,7 @@ private:
     void updateLyrics(qint64 time);
     void updateState();
 
-    QMenu *m_menu, *m_view;
+    QMenu *m_menu, *m_view, *m_skinMenu;
     QDockWidget *m_playlistDock, *m_eqDock, *m_lyricsDock;
     QLabel *m_title, *m_status, *m_clock = nullptr;
     bool m_showRemaining = false;
@@ -55,6 +57,9 @@ private:
     ConsoleTitle *m_titleBar;
     ConsoleKey *m_play;
     QWidget *m_deck, *m_compactBar;
+    QWidget *m_audioControls, *m_panelSwitches;
+    QLabel *m_volumeReadout;
+    int m_preferredHeight = 238;
     ConsoleKey *m_compactPlay;
     CompactDisplay *m_compactTitle;
     bool m_savedOnClose = false;

@@ -12,6 +12,7 @@
 #include <QMimeData>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QLayout>
@@ -75,6 +76,7 @@ int main(int argc, char **argv)
     qputenv("XDG_CACHE_HOME", temp.path().toUtf8());
     const QString root = temp.filePath("plugins");
     qputenv("QMMP_PLUGINS", root.toUtf8());
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication app(argc, argv);
     app.setOrganizationName("qmmp");
     app.setApplicationName("test");
@@ -106,7 +108,8 @@ int main(int argc, char **argv)
         const QString path = temp.filePath(titles.at(samples.size()) + "." + ext);
         samples << path;
         const QString seconds = ext == "mp3" ? "0.15" : (ext == "wav" ? "9" : "1");
-        CHECK(QProcess::execute(argv[1], { "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440",
+        const QString source = ext == "wav" ? "anoisesrc=color=pink:amplitude=0.45:seed=42" : "sine=frequency=440";
+        CHECK(QProcess::execute(argv[1], { "-v", "error", "-f", "lavfi", "-i", source,
                 "-ac", "2", "-t", seconds, path }) == 0);
         if(ext == "mp3")
             CHECK(QFileInfo(path).size() < 8192);
@@ -267,20 +270,47 @@ int main(int argc, char **argv)
     CHECK(rock);
     rock->trigger();
     CHECK(core->eqSettings().isEnabled() && band->value() == core->eqSettings().gain(4));
-    QAction *blue = nullptr, *violet = nullptr, *obsidian = nullptr;
+    QAction *blue = nullptr, *violet = nullptr, *obsidian = nullptr, *amber = nullptr, *importSkin = nullptr;
     for(auto *action : window->findChildren<QAction *>())
     {
+        if(action->data() == ":/classic/skins/amber/skin.xml") amber = action;
+        if(action->text() == "载入皮肤…") importSkin = action;
         if(action->data() == ":/classic/skins/midnight.ini") blue = action;
         if(action->data() == ":/classic/skins/violet.ini") violet = action;
         if(action->data() == ":/classic/skins/obsidian.ini") obsidian = action;
     }
-    CHECK(blue && violet && obsidian && obsidian->text() == "曜石黑");
+    CHECK(blue && violet && obsidian && amber && importSkin && obsidian->text() == "曜石黑");
+    const QString download = temp.filePath("分享的皮肤.qmmp-skin");
+    CHECK(QFile::copy(AMBER_SKIN_FILE, download));
+    QTimer::singleShot(0, [&] {
+        auto *dialog = qobject_cast<QFileDialog *>(QApplication::activeModalWidget());
+        if(dialog)
+        {
+            dialog->selectFile(download);
+            QMetaObject::invokeMethod(dialog, "accept", Qt::QueuedConnection);
+        }
+    });
+    importSkin->trigger();
+    const QString installed = QSettings().value("Classic/skin").toString();
+    CHECK(installed.startsWith(Qmmp::configDir() + "/skins/") && QFile::exists(installed));
+    CHECK(QFile::remove(download));
+    CHECK(window->property("spectrumColor").toString() == "#fff39b");
+    CHECK(clock->x() < title->x() && window->findChild<QLabel *>("volumeReadout")->isVisible());
+    CHECK(waitFor([&] { return order->mapTo(listDock, QPoint()).y() > list->mapTo(listDock, QPoint()).y(); }));
+    QAction *imported = nullptr;
+    for(auto *action : window->findChildren<QAction *>())
+        if(action->data() == installed)
+            imported = action;
+    CHECK(imported && imported->isChecked() && imported->text() == "琥珀静听");
     obsidian->trigger();
     CHECK(obsidian->isChecked() && QSettings().value("Classic/skin") == obsidian->data());
     CHECK(window->property("spectrumColor").toString() == "#ffbf62");
     CHECK(clock->palette().color(QPalette::WindowText) == QColor("#ffbf62"));
     CHECK(list->palette().color(QPalette::Base) == QColor("#101113"));
     CHECK(current->palette().color(QPalette::WindowText) == QColor("#ffbf62"));
+    CHECK(waitFor([&] { return clock->x() > title->x(); }));
+    imported->trigger();
+    CHECK(window->property("spectrumColor").toString() == "#fff39b");
     blue->trigger();
     CHECK(window->property("spectrumColor").toString() == "#89e6db");
     violet->trigger();
@@ -290,10 +320,10 @@ int main(int argc, char **argv)
         PlayListManager::instance()->addPaths(samples);
         CHECK(waitFor([&] { return list->model()->rowCount() == samples.size()+1; }));
         const QList<QWidget *> panels {window,eqDock,listDock,lyricDock};
-        QRect bounds;
-        for(auto *panel : panels)
-            bounds |= panel->frameGeometry();
         auto savePanels = [&](const QString &path) {
+            QRect bounds;
+            for(auto *panel : panels)
+                bounds |= panel->frameGeometry();
             QImage image(bounds.size(),QImage::Format_ARGB32_Premultiplied);
             image.fill(Qt::transparent);
             QPainter painter(&image);
@@ -307,6 +337,16 @@ int main(int argc, char **argv)
         {
             obsidian->trigger();
             CHECK(savePanels(QDir(argv[7]).filePath("classic-obsidian.png")));
+            amber->trigger();
+            QAction *arrange = nullptr;
+            for(auto *action : window->findChildren<QAction *>())
+                if(action->text() == "磁吸排列")
+                    arrange = action;
+            CHECK(arrange);
+            arrange->trigger();
+            CHECK(waitFor([&] { return lyricDock->y() == listDock->frameGeometry().bottom()+1 &&
+                                       listDock->height() == listDock->property("stackHeight").toInt(); }));
+            CHECK(savePanels(QDir(argv[7]).filePath("classic-amber.png")));
             violet->trigger();
         }
     }
@@ -390,7 +430,13 @@ int main(int argc, char **argv)
     }
     CHECK(waitFor([&] { return barTitle->text() == "春天" && barTitle->accessibleName().contains("00:"); }));
     if(argc >= 8)
+    {
         CHECK(window->grab().save(QDir(argv[7]).filePath("classic-mini.png")));
+        amber->trigger();
+        QCoreApplication::processEvents();
+        CHECK(window->grab().save(QDir(argv[7]).filePath("classic-amber-mini.png")));
+        violet->trigger();
+    }
     auto barButton = [&](const QString &name) -> QToolButton * {
         for(auto *key : bar->findChildren<QToolButton *>())
             if(key->accessibleName() == name)
@@ -496,5 +542,12 @@ int main(int argc, char **argv)
     QSettings().setValue("Classic/compactOffset", QPoint(100000, 100000));
     window->findChild<QToolButton *>("compactMode")->click();
     CHECK(window->frameGeometry().bottomRight() == window->screen()->availableGeometry().bottomRight());
+    ui.reset();
+    QSettings().setValue("Classic/skin", installed);
+    ui.reset(factory->create());
+    window = qobject_cast<QMainWindow *>(ui.get());
+    CHECK(window && window->property("spectrumColor").toString() == "#fff39b");
+    CHECK(window->findChild<QWidget *>("compactBar")->isVisible());
+    CHECK(!window->findChild<QToolButton *>("medallion")->icon().isNull());
     return 0;
 }

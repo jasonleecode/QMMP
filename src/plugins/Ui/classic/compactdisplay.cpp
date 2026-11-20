@@ -67,11 +67,11 @@ void CompactDisplay::paintEvent(QPaintEvent *)
     lens.lineTo(face.left(), face.top()+6);
     lens.closeSubpath();
     QLinearGradient backlight(0, face.top(), 0, face.bottom());
-    backlight.setColorAt(0, QColor("#a16a20"));
-    backlight.setColorAt(.12, QColor("#fff09a"));
-    backlight.setColorAt(.54, QColor("#f6cf58"));
-    backlight.setColorAt(1, QColor("#daa03f"));
-    p.setPen(QColor("#59431e"));
+    backlight.setColorAt(0, m_backlight.darker(160));
+    backlight.setColorAt(.12, m_backlight.lighter(132));
+    backlight.setColorAt(.54, m_backlight);
+    backlight.setColorAt(1, m_backlight.darker(116));
+    p.setPen(m_ink.lighter(145));
     p.setBrush(backlight);
     p.drawPath(lens);
 
@@ -86,7 +86,7 @@ void CompactDisplay::paintEvent(QPaintEvent *)
     m_offset %= cycle;
     const int x = area.left() - m_offset;
     const int baseline = area.top() + (area.height() - metrics.height()) / 2 + metrics.ascent();
-    p.setPen(QColor("#38270e"));
+    p.setPen(m_ink);
     p.drawText(x, baseline, m_readout);
     if(x + cycle <= area.right())
         p.drawText(x + cycle, baseline, m_readout);

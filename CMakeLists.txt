@@ -333,6 +333,7 @@ if(BUILD_TESTING AND UNIX AND TARGET classic AND TARGET mpeg AND TARGET ffmpeg A
     find_program(FFMPEG_EXECUTABLE ffmpeg)
     if(FFMPEG_EXECUTABLE)
         add_executable(classic_playback_test tests/classic_playback.cpp)
+        target_compile_definitions(classic_playback_test PRIVATE AMBER_SKIN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/skins/amber.qmmp-skin")
         target_link_libraries(classic_playback_test PRIVATE Qt6::Widgets libqmmpui libqmmp)
         add_test(NAME classic_playback COMMAND classic_playback_test
                  ${FFMPEG_EXECUTABLE} $<TARGET_FILE:classic> $<TARGET_FILE:mpeg>

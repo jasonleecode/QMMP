@@ -1,6 +1,10 @@
 <RCC><qresource prefix="/classic">
 <file>skins/classic.qss</file><file>skins/violet.ini</file><file>skins/midnight.ini</file>
 <file>skins/obsidian.ini</file><file>skins/obsidian.qss</file>
+<file>skins/amber/skin.xml</file>
+<file>skins/amber/style.qss</file>
+<file>skins/amber/transport.svg</file>
+<file>skins/amber/emblem.svg</file><file>skins/amber/previous.svg</file><file>skins/amber/next.svg</file>
 <file>skins/check.svg</file>
 <file alias="player.svg">../../../app/images/scalable/qmmp-classic.svg</file>
 <file alias="eq.preset">../skinned/resources/eq.preset</file>

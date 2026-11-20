@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="396" height="38" viewBox="0 0 396 38" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="well" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#142632"/><stop offset=".14" stop-color="#030b12"/><stop offset=".78" stop-color="#0b1720"/><stop offset="1" stop-color="#253846"/>
+    </linearGradient>
+    <linearGradient id="wing" x2="0" y2="1">
+      <stop stop-color="#365464"/><stop offset=".14" stop-color="#172f3b"/><stop offset=".46" stop-color="#182d38"/><stop offset=".5" stop-color="#08151d"/><stop offset="1" stop-color="#030c13"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#well)" d="M0 0h396v38H0z"/>
+  <path fill="url(#wing)" d="M0 3h98l31 30h126l29-30h112v35H0z"/>
+  <path fill="none" stroke="#604c35" stroke-width="4" d="M0 3h98l31 30h126l29-30h112"/>
+  <path fill="none" stroke="#dfbd84" d="M0 2h98l31 30h126l29-30h112"/>
+  <path fill="none" stroke="#41606b" d="M0 36h396"/>
+</svg>

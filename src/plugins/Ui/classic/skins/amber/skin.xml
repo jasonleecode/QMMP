@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<qmmp-skin version="1" name="琥珀静听">
+  <colors edge="#031017" shadow="#071c26" body="#113342" metal="#244f62" shine="#6493a3"
+          display="#ffd96a" glow="#326277" accent="#e1aa4a" spectrum="#fff39b" text="#dbe9e8" muted="#96b5be"/>
+  <layout clock="left" playlistTools="bottom" volume="transport" panelSwitches="transport"
+          volumeReadout="true" flatKeys="true" keyWidth="25" keyHeight="24" playWidth="25" playHeight="24"
+          libraryWidth="39" libraryHeight="22" libraryText="音乐窗" keySpacing="1" volumeWidth="60"
+          screenMargin="2" screenSpacing="0" mainHeight="186" playlistHeight="162" lyricsHeight="116"/>
+  <captions main="QMMP PLAYER" equalizer="EQUALIZER" playlist="PLAYLIST" lyrics="LYRIC"/>
+  <artwork emblem="emblem.svg"/>
+  <icon action="previous" file="previous.svg"/>
+  <icon action="next" file="next.svg"/>
+  <style file="style.qss"/>
+</qmmp-skin>

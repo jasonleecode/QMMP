@@ -70,6 +70,12 @@ void ConsoleKey::setGlyph(Glyph glyph)
     update();
 }
 
+void ConsoleKey::setSkinIcons(const QHash<QString, QIcon> &icons)
+{
+    m_icons = icons;
+    update();
+}
+
 void ConsoleKey::paintEvent(QPaintEvent *)
 {
     QStyleOptionToolButton option;
@@ -77,7 +83,7 @@ void ConsoleKey::paintEvent(QPaintEvent *)
     QPainter p(this);
     style()->drawComplexControl(QStyle::CC_ToolButton, &option, &p, this);
     p.setRenderHint(QPainter::Antialiasing);
-    if(objectName() == "round" || objectName() == "play")
+    if((objectName() == "round" || objectName() == "play") && !property("flatTransport").toBool())
     {
         const QRectF lens = QRectF(rect()).adjusted(3,3,-3,-3);
         QLinearGradient gloss(0,lens.top(),0,lens.center().y());
@@ -86,6 +92,22 @@ void ConsoleKey::paintEvent(QPaintEvent *)
         p.setPen(Qt::NoPen);
         p.setBrush(gloss);
         p.drawEllipse(QRectF(lens.x()+1,lens.y(),lens.width()-2,lens.height()*.56));
+    }
+    if(!m_icons.isEmpty())
+    {
+        static const QString actions[] = {"play","pause","stop","previous","next","eject","minimize",
+                                          "compact","restore","close","speaker","sequential","shuffle"};
+        const QString action = m_glyph == Speaker && isChecked() ? QStringLiteral("mute") : actions[m_glyph];
+        const auto icon = m_icons.constFind(action);
+        if(icon != m_icons.cend())
+        {
+            const auto mode = !isEnabled() ? QIcon::Disabled : isDown() ? QIcon::Selected :
+                              underMouse() ? QIcon::Active : QIcon::Normal;
+            const int side = qMax(1, qMin(width(), height()) - 6);
+            const QRect bounds((width()-side)/2, (height()-side)/2, side, side);
+            icon->paint(&p, bounds, Qt::AlignCenter, mode);
+            return;
+        }
     }
     p.translate(rect().center() + QPointF(.5, isDown() ? 1.5 : .5));
     const qreal scale = qMin(width(), height()) / (height() > 32 ? 3.4 : 1.9);

@@ -8,7 +8,7 @@ QWidget#chrome,QWidget#transport,QWidget#compactBar {
 QWidget#transport {background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 @metal@,stop:0.48 @body@,stop:0.51 @shadow@,stop:1 @edge@);}
 QWidget#deck QLabel,QWidget#chrome QLabel,QWidget#eqBody QLabel,QWidget#lyricPanel QLabel { color:@text@; background:transparent; }
 QWidget#chrome QLabel#caption {color:@muted@; font-size:15px;font-weight:600;}
-QLabel#compactTitle {color:@text@;background:transparent;font-weight:600;}
+QLabel#compactTitle { qproperty-backlight:#f6cf58; qproperty-ink:#38270e;color:@text@;background:transparent;font-weight:600;}
 QToolButton#medallion {background:qradialgradient(cx:.4,cy:.36,radius:.7,fx:.36,fy:.29,stop:0 #fff5c8,stop:.48 #e6c177,stop:1 #79613a);color:#493347;border:1px solid #bba36b;border-radius:8px;font:bold 12px serif;}
 QWidget#readout {border:1px solid @edge@; border-radius:3px; background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 @metal@,stop:.45 @body@,stop:.52 @shadow@,stop:1 @edge@);}
 QLabel#song,QLabel#clock {font-size:16px;font-weight:600;}
