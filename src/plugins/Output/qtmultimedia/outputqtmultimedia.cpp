@@ -57,6 +57,7 @@ bool OutputQtMultimedia::initialize(quint32 freq, ChannelMap map, Qmmp::AudioFor
     {
     case Qmmp::PCM_U8:
     case Qmmp::PCM_S8:
+        format = Qmmp::PCM_U8;
         qformat.setSampleFormat(QAudioFormat::UInt8);
         break;
     case Qmmp::PCM_S16LE:
@@ -66,7 +67,7 @@ bool OutputQtMultimedia::initialize(quint32 freq, ChannelMap map, Qmmp::AudioFor
         qformat.setSampleFormat(QAudioFormat::Int32);
         break;
     case Qmmp::PCM_FLOAT:
-        qformat.setSampleFormat(QAudioFormat::Int32);
+        qformat.setSampleFormat(QAudioFormat::Float);
         break;
     default:
         break;

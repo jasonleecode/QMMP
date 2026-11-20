@@ -1,4 +1,5 @@
 #include "classicwindow.h"
+#include "compactdisplay.h"
 #include "classicskin.h"
 #include "classicequalizer.h"
 #include "consolecontrols.h"
@@ -11,7 +12,7 @@
 #include <qmmpui/playlisttrack.h>
 #include <qmmpui/qmmpuisettings.h>
 #include <qmmpui/uihelper.h>
-#include <QAbstractListModel>
+#include "tracklist.h"
 #include <QCloseEvent>
 #include <QDockWidget>
 #include <QDragEnterEvent>
@@ -33,47 +34,6 @@
 #include <QStyle>
 #include <QToolButton>
 #include <QVBoxLayout>
-
-class TrackList : public QAbstractListModel
-{
-public:
-    using QAbstractListModel::QAbstractListModel;
-
-    void resetPlaylist(PlayListModel *playlist)
-    {
-        beginResetModel();
-        m_playlist = playlist;
-        m_count = playlist ? playlist->trackCount() : 0;
-        endResetModel();
-    }
-    int rowCount(const QModelIndex &parent) const override { return parent.isValid() ? 0 : m_count; }
-    QVariant data(const QModelIndex &index, int role) const override
-    {
-        if(!m_playlist || !index.isValid() || index.row() >= m_playlist->trackCount())
-            return {};
-        const auto *track = m_playlist->track(index.row());
-        if(!track)
-            return {};
-        if(role == Qt::UserRole+1)
-            return m_playlist == PlayListManager::instance()->currentPlayList() &&
-                   index.row() == m_playlist->currentIndex();
-        if(role == Qt::UserRole)
-            return track->duration();
-        if(role == Qt::ToolTipRole)
-            return track->path();
-        if(role != Qt::DisplayRole)
-            return {};
-        return track->formattedTitle(0);
-    }
-    void refreshMetadata()
-    {
-        if(m_count)
-            emit dataChanged(index(0, 0), index(m_count - 1, 0), {Qt::DisplayRole, Qt::UserRole});
-    }
-private:
-    PlayListModel *m_playlist = nullptr;
-    int m_count = 0;
-};
 
 static QStringList droppedPaths(const QMimeData *data)
 {
@@ -182,6 +142,11 @@ ClassicWindow::ClassicWindow()
     auto *manager = PlayListManager::instance();
     bindPlaylist(manager->selectedPlayList());
     connect(manager,&PlayListManager::selectedPlayListChanged,this,&ClassicWindow::bindPlaylist);
+    connect(&m_lyricsLoader, &LyricsLoader::loaded, this, [this](const SyncedLyrics &lyrics) {
+        m_lyrics = lyrics;
+        m_line = -2;
+        updateLyrics(m_displayPosition);
+    });
     connect(core,&SoundCore::trackInfoChanged,this,&ClassicWindow::updateTrack);
     connect(core,&SoundCore::elapsedChanged,this,&ClassicWindow::updatePosition);
     connect(core,&SoundCore::stateChanged,this,&ClassicWindow::updateState);
@@ -209,6 +174,11 @@ ClassicWindow::ClassicWindow()
     if(saved)
     {
         restoreGeometry(settings.value("Classic/consoleGeometry").toByteArray());
+        const QRect normal = settings.value("Classic/consoleRect").toRect();
+        auto *savedScreen = QGuiApplication::screenAt(normal.center());
+        if(!isMaximized() && normal.isValid() && savedScreen &&
+           savedScreen->availableGeometry().contains(normal.topLeft()))
+            setGeometry(normal);
         restoreState(settings.value("Classic/consoleDocks").toByteArray());
     }
     else if(settings.contains("Classic/geometry"))
@@ -221,11 +191,17 @@ ClassicWindow::ClassicWindow()
     m_magnet = std::make_unique<WindowMagnet>(this, panels);
     m_titleBar->setWindowMagnet(m_magnet.get());
     m_view->addAction(tr("磁吸排列"), m_magnet.get(), &WindowMagnet::arrange);
-    if(!saved)
+    if(settings.value("Classic/compactMode", false).toBool())
+        setCompactMode(true);
+    else if(!saved)
         m_magnet->arrange();
 }
 
-ClassicWindow::~ClassicWindow() = default;
+ClassicWindow::~ClassicWindow()
+{
+    if(!m_savedOnClose)
+        saveLayout();
+}
 
 void ClassicWindow::createMenus()
 {
@@ -405,17 +381,17 @@ QWidget *ClassicWindow::createCompactBar()
     auto *bar = new WindowDragArea(this);
     bar->setObjectName("compactBar");
     auto *row = new QHBoxLayout(bar);
-    row->setContentsMargins(8, 3, 4, 3);
-    row->setSpacing(3);
-    m_compactTitle = new QLabel(bar);
-    m_compactTitle->setObjectName("compactTitle");
-    m_compactTitle->setAttribute(Qt::WA_TransparentForMouseEvents);
-    m_compactTitle->setTextFormat(Qt::PlainText);
-    m_compactTitle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    row->setContentsMargins(4, 3, 4, 3);
+    row->setSpacing(2);
+    auto *icon = new QLabel(bar);
+    icon->setAttribute(Qt::WA_TransparentForMouseEvents);
+    icon->setPixmap(QIcon(":/classic/player.svg").pixmap(QSize(21, 21), devicePixelRatioF()));
+    row->addWidget(icon);
+    m_compactTitle = new CompactDisplay(bar);
     row->addWidget(m_compactTitle, 1);
     auto button = [&](ConsoleKey::Glyph glyph, const QString &name) {
         auto *key = new ConsoleKey(glyph, name, bar);
-        key->setFixedSize(26, 22);
+        key->setFixedSize(22, 22);
         row->addWidget(key);
         return key;
     };
@@ -424,6 +400,7 @@ QWidget *ClassicWindow::createCompactBar()
     m_compactPlay = button(ConsoleKey::Play, tr("播放"));
     connect(m_compactPlay, &QToolButton::clicked, this, &ClassicWindow::togglePlayback);
     connect(button(ConsoleKey::Next, tr("下一首")), &QToolButton::clicked, player, &MediaPlayer::next);
+    connect(button(ConsoleKey::Stop, tr("停止")), &QToolButton::clicked, player, &MediaPlayer::stop);
     connect(button(ConsoleKey::Restore, tr("还原主窗口")), &QToolButton::clicked, this,
             [this] { setCompactMode(false); });
     return bar;
@@ -437,7 +414,12 @@ void ClassicWindow::setCompactMode(bool compact)
     m_view->setEnabled(!compact);
     if(compact)
     {
-        const QRect area = screen()->availableGeometry();
+        QSettings settings;
+        QScreen *target = screen();
+        for(QScreen *candidate : QGuiApplication::screens())
+            if(candidate->name() == settings.value("Classic/compactScreen").toString())
+                target = candidate;
+        const QRect area = target->availableGeometry();
         m_normalRect = geometry();
         m_normalGeometry = saveGeometry();
         m_normalDocks = saveState();
@@ -447,11 +429,16 @@ void ClassicWindow::setCompactMode(bool compact)
         m_compactBar->show();
         setWindowFlag(Qt::WindowStaysOnTopHint, true);
         setFixedSize(qMin(320, area.width()), 32);
-        move(area.right() - width() + 1, area.top());
+        QPoint at(area.right() - width() + 1, area.top());
+        if(settings.contains("Classic/compactOffset"))
+            at = area.topLeft() + settings.value("Classic/compactOffset").toPoint();
+        move(qBound(area.left(), at.x(), area.right()-width()+1),
+             qBound(area.top(), at.y(), qMax(area.top(), area.bottom()-height()+1)));
         showNormal();
     }
     else
     {
+        saveCompactPosition();
         setWindowFlag(Qt::WindowStaysOnTopHint, false);
         setMinimumSize(0, 0);
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
@@ -607,13 +594,16 @@ void ClassicWindow::bindPlaylist(PlayListModel *playlist)
             m_list->scrollTo(index);
     };
     selectCurrent();
-    connect(playlist, &PlayListModel::listChanged, this, [=](int flags) {
+    connect(playlist, &PlayListModel::listChanged, this, [=, current = playlist->currentTrack()](int flags) mutable {
         if(flags & PlayListModel::STRUCTURE)
-            m_tracks->resetPlaylist(playlist);
+            m_tracks->syncStructure();
         else if(flags & PlayListModel::METADATA)
             m_tracks->refreshMetadata();
-        if(flags & (PlayListModel::CURRENT | PlayListModel::STRUCTURE))
+        if((flags & PlayListModel::CURRENT) && current != playlist->currentTrack())
+        {
+            current = playlist->currentTrack();
             selectCurrent();
+        }
     });
 }
 
@@ -632,10 +622,10 @@ void ClassicWindow::updateState()
     else
     {
         m_path.clear();
+        m_lyricsLoader.request({});
         m_lyrics = {};
         m_line = -2;
         m_title->setText(tr("尚未播放"));
-        m_compactTitle->setText(m_title->text());
         m_compactBar->setToolTip({});
         m_status->setText(tr("状态: 停止"));
         if(core->state() == Qmmp::NormalError)
@@ -656,7 +646,6 @@ void ClassicWindow::updateTrack()
     const QString song = title.isEmpty() ? QFileInfo(path).completeBaseName() : title;
     m_title->setText(artist.isEmpty() ? song : artist + QStringLiteral(" - ") + song);
     m_title->setToolTip(m_title->text());
-    m_compactTitle->setText(m_title->text());
     m_compactBar->setToolTip(m_title->text());
     const int channels = core->audioParameters().channels();
     const QString mode = channels == 2 ? tr("立体声") : channels == 1 ? tr("单声道") : QString();
@@ -665,7 +654,8 @@ void ClassicWindow::updateTrack()
     if(path != m_path)
     {
         m_path = path;
-        m_lyrics.loadForTrack(path);
+        m_lyrics = {};
+        m_lyricsLoader.request(path);
         m_line = -2;
     }
     updatePosition(core->elapsed());
@@ -693,6 +683,8 @@ void ClassicWindow::updatePosition(qint64 time)
                                : QStringLiteral("--:--");
     }
     m_clock->setText(display);
+    const QString progress = m_path.isEmpty() ? QString() : elapsed.rightJustified(5, QLatin1Char('0'));
+    m_compactTitle->setReadout(m_title->text(), progress, SoundCore::instance()->state() == Qmmp::Playing);
     const QString hint = m_showRemaining ? tr("点击显示已播放时间") : tr("点击显示剩余时间");
     m_clock->setToolTip(elapsed + " / " + (duration > 0 ? timeLabel(duration) : QStringLiteral("--:--"))
                         + QChar::LineFeed + hint);
@@ -734,12 +726,30 @@ void ClassicWindow::changeEvent(QEvent *event)
     QMainWindow::changeEvent(event);
 }
 
-void ClassicWindow::closeEvent(QCloseEvent *event)
+void ClassicWindow::saveCompactPosition() const
 {
     QSettings settings;
+    settings.setValue("Classic/compactScreen", screen()->name());
+    settings.setValue("Classic/compactOffset", frameGeometry().topLeft() - screen()->availableGeometry().topLeft());
+}
+
+void ClassicWindow::saveLayout() const
+{
+    QSettings settings;
+    settings.setValue("Classic/compactMode", !m_normalGeometry.isEmpty());
+    if(!m_normalGeometry.isEmpty())
+        saveCompactPosition();
     settings.setValue("Classic/consoleGeometry", m_normalGeometry.isEmpty() ? saveGeometry() : m_normalGeometry);
+    const QRect normal = m_normalGeometry.isEmpty() ? normalGeometry() : m_normalRect;
+    settings.setValue("Classic/consoleRect", normal);
     QByteArray docks = m_normalDocks.isEmpty() ? m_minimizedDocks : m_normalDocks;
     settings.setValue("Classic/consoleDocks", docks.isEmpty() ? saveState() : docks);
+}
+
+void ClassicWindow::closeEvent(QCloseEvent *event)
+{
+    saveLayout();
+    m_savedOnClose = true;
     QMainWindow::closeEvent(event);
     UiHelper::instance()->exit();
 }

@@ -123,7 +123,7 @@ QStringList Qmmp::findPlugins(const QString &prefix)
 {
     QStringList roots { pluginPath() };
     if(prefix == "Input"_L1)
-        roots << configDir() + QStringLiteral("/plugins-" STR(QMMP_VERSION_MAJOR) "." STR(QMMP_VERSION_MINOR));
+        roots.prepend(configDir() + QStringLiteral("/plugins-" STR(QMMP_VERSION_MAJOR) "." STR(QMMP_VERSION_MINOR)));
 
     QStringList paths;
     for(const QString &root : std::as_const(roots))

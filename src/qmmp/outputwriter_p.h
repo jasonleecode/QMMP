@@ -76,6 +76,7 @@ public:
      * Returns Recycler pointer.
      */
     Recycler *recycler();
+    bool hasFailed() const { return m_failed.load(); }
     /*!
      * Returns selected audio parameters, i.e. passed by \b initialize function.
      */
@@ -101,7 +102,8 @@ private:
     void startVisualization();
     void stopVisualization();
 
-    bool m_skip = false;
+    std::atomic_bool m_skip{false}, m_failed{false};
+    qint64 m_pendingPosition = -1; // guarded by the recycler mutex
     QMutex m_mutex;
     Recycler m_recycler;
     StateHandler *m_handler;

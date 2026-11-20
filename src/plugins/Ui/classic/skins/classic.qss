@@ -108,3 +108,10 @@ QDialog[classicDialog="true"] QScrollBar:horizontal {height:9px;background:@shad
 QDialog[classicDialog="true"] QScrollBar::handle:horizontal {background:@metal@;min-width:12px;}
 QDialog[classicDialog="true"] QScrollBar::add-line:horizontal,
 QDialog[classicDialog="true"] QScrollBar::sub-line:horizontal {width:0;}
+
+QWidget#compactBar QToolButton {
+    border-radius:10px; border:1px solid @edge@; border-top-color:@shine@;
+    background:qradialgradient(cx:.46,cy:.25,radius:.81,fx:.45,fy:.23,stop:0 @metal@,stop:.6 @body@,stop:1 @edge@);
+}
+QWidget#compactBar QToolButton:hover { border-color:@shine@; }
+QWidget#compactBar QToolButton:pressed { background:@glow@; }

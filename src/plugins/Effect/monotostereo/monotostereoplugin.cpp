@@ -46,6 +46,7 @@ void MonoToStereoPlugin::applyEffect(Buffer *b)
         {
             delete [] m_tmp;
             m_tmp = new float[b->samples];
+            m_size = b->samples;
         }
         memcpy(m_tmp, b->data, b->samples * sizeof(float));
 

@@ -52,6 +52,8 @@ PluginItem::PluginItem(QTreeWidgetItem *parent, InputSourceFactory *factory, con
 PluginItem::PluginItem(QTreeWidgetItem *parent, DecoderFactory *factory, const QString &path)
     : QTreeWidgetItem(parent, { factory->properties().name, path.section(QLatin1Char('/'), -1) }, DECODER)
 {
+    setToolTip(0, path);
+    setToolTip(1, path);
     setCheckState(0, Decoder::isEnabled(factory) ? Qt::Checked : Qt::Unchecked);
     m_has_about = factory->properties().hasAbout;
     m_has_config = factory->properties().hasSettings;

@@ -65,6 +65,7 @@ void QmmpAudioEngine::reset()
     m_done = false;
     m_finish = false;
     m_seekTime = -1;
+    m_resetOnSeek = false;
     m_output_at = 0;
     m_user_stop = false;
     m_bitrate = 0;
@@ -213,47 +214,37 @@ void QmmpAudioEngine::removeEffect(EffectFactory *factory)
 
 void QmmpAudioEngine::seek(qint64 time)
 {
-    if (m_output && m_output->isRunning())
-    {
-        m_output->seek(time, true);
-        if (isRunning())
-        {
-            mutex()->lock ();
-            m_seekTime = time;
-            mutex()->unlock();
-            QMutexLocker lock(m_output->recycler()->mutex());
-            m_output->recycler()->cond()->wakeAll();
-        }
-    }
+    QMutexLocker lock(mutex());
+    if(!isRunning() || !m_output || m_output->hasFailed())
+        return;
+    m_seekTime = time;
+    m_resetOnSeek = true;
+    QMutexLocker queueLock(m_output->recycler()->mutex());
+    m_output->recycler()->cond()->wakeAll();
 }
 
 void QmmpAudioEngine::pause()
 {
-    if (m_output)
-        m_output->pause();
-
-    if (m_output)
+    QMutexLocker lock(mutex());
+    if(m_output && !m_output->hasFailed())
     {
-        m_output->recycler()->mutex()->lock ();
+        m_output->pause();
+        QMutexLocker queueLock(m_output->recycler()->mutex());
         m_output->recycler()->cond()->wakeAll();
-        m_output->recycler()->mutex()->unlock();
     }
 }
 
 void QmmpAudioEngine::stop()
 {
     m_user_stop = true;
-
-    if (m_output)
-        m_output->recycler()->cond()->wakeAll();
-
-    if(isRunning())
     {
-        if(m_decoder && m_inputs[m_decoder])
-            m_inputs[m_decoder]->stop();
-
-        wait();
+        QMutexLocker lock(mutex());
+        if(m_output)
+            m_output->stop();
+        if(m_decoder && m_inputs.value(m_decoder))
+            m_inputs.value(m_decoder)->stop();
     }
+    wait();
 
     if (m_output)
     {
@@ -351,15 +342,15 @@ void QmmpAudioEngine::run()
     StateHandler::instance()->dispatch(m_decoder->totalTime());
     StateHandler::instance()->dispatch(Qmmp::Playing);
 
-    while(!m_done && !m_finish)
+    while(!m_done && !m_finish && !m_output->hasFailed())
     {
         mutex()->lock ();
         //seek
         if (m_seekTime >= 0)
         {
-            m_output->recycler()->mutex()->lock ();
-            m_output->recycler()->clear();
-            m_output->recycler()->mutex()->unlock ();
+            if(m_resetOnSeek)
+                m_output->seek(m_seekTime, true);
+            m_resetOnSeek = false;
             m_decoder->seek(m_seekTime);
             m_seekTime = -1;
             m_output_at = 0;
@@ -446,6 +437,11 @@ void QmmpAudioEngine::run()
                 m_decoder = m_decoders.dequeue();
                 //m_seekTime = m_inputs.value(m_decoder)->offset();
                 flush(true);
+                if(m_done || m_output->hasFailed())
+                {
+                    mutex()->unlock();
+                    continue;
+                }
                 //use current output if possible
                 prepareEffects(m_decoder);
                 if(m_ap == m_output->inputAudioParameters())
@@ -456,7 +452,6 @@ void QmmpAudioEngine::run()
                     StateHandler::instance()->dispatch(m_decoder->totalTime());
                     m_output->seek(0); //reset counter
                     StateHandler::instance()->dispatch(Qmmp::Playing);
-                    mutex()->unlock();
                     addOffset(); //offset
                 }
                 else
@@ -469,6 +464,13 @@ void QmmpAudioEngine::run()
                     m_output->recycler()->mutex()->unlock();
 
                     m_output->wait();
+                    mutex()->lock();
+                    if(m_user_stop || m_output->hasFailed())
+                    {
+                        m_done = true;
+                        mutex()->unlock();
+                        continue;
+                    }
                     delete m_output;
                     m_output = createOutput();
                     if(m_output)
@@ -483,7 +485,7 @@ void QmmpAudioEngine::run()
                 }
                 if(!m_output)
                     m_done = true;
-
+                mutex()->unlock();
                 continue;
             }
 
@@ -492,12 +494,10 @@ void QmmpAudioEngine::run()
                 flush(true);
                 m_output->recycler()->mutex()->lock ();
                 // end of stream
-                while (!m_output->recycler()->empty() && !m_user_stop && m_seekTime < 0)
+                while (!m_output->recycler()->empty() && !m_user_stop && m_seekTime < 0 && !m_output->hasFailed())
                 {
                     m_output->recycler()->cond()->wakeOne();
-                    mutex()->unlock();
-                    m_output->recycler()->cond()->wait(m_output->recycler()->mutex());
-                    mutex()->lock ();
+                    waitForOutput();
                 }
                 m_output->recycler()->mutex()->unlock();
             }
@@ -506,17 +506,17 @@ void QmmpAudioEngine::run()
             if((m_seekTime < 0 && m_decoders.isEmpty()) || m_user_stop)
             {
                 m_done = true;
-                m_finish = !m_user_stop;
+                m_finish = !m_user_stop && !m_output->hasFailed();
             }
         }
         else
             m_finish = true;
         mutex()->unlock();
     }
-    clearDecoders();
     mutex()->lock ();
+    clearDecoders();
     m_next = false;
-    if (m_finish)
+    if (m_finish && m_output && !m_output->hasFailed())
         finish();
     if(m_output)
         m_output->recycler()->cond()->wakeAll();
@@ -538,15 +538,26 @@ void QmmpAudioEngine::run()
     }
 }
 
+void QmmpAudioEngine::waitForOutput()
+{
+    // Callers hold both locks. Reacquire them in engine -> queue order after a wakeup.
+    auto *queue = m_output->recycler();
+    mutex()->unlock();
+    queue->cond()->wait(queue->mutex());
+    queue->mutex()->unlock();
+    mutex()->lock();
+    queue->mutex()->lock();
+}
+
 void QmmpAudioEngine::flush(bool final)
 {
     ulong min = final ? 0 : m_bks;
 
-    while ((!m_done && !m_finish) && m_output_at > min)
+    while (!m_done && !m_finish && !m_output->hasFailed() && m_output_at > min)
     {
         m_output->recycler()->mutex()->lock ();
 
-        while ((m_output->recycler()->full() || m_output->recycler()->blocked()) && (!m_done && !m_finish))
+        while ((m_output->recycler()->full() || m_output->recycler()->blocked()) && !m_done && !m_finish && !m_output->hasFailed())
         {
             if(m_seekTime >= 0)
             {
@@ -554,13 +565,11 @@ void QmmpAudioEngine::flush(bool final)
                 m_output->recycler()->mutex()->unlock ();
                 return;
             }
-            mutex()->unlock();
-            m_output->recycler()->cond()->wait(m_output->recycler()->mutex());
-            mutex()->lock ();
+            waitForOutput();
             m_done = m_user_stop.load();
         }
 
-        if (m_user_stop || m_finish)
+        if (m_user_stop || m_finish || m_output->hasFailed())
             m_done = true;
         else
         {

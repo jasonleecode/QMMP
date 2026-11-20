@@ -16,6 +16,7 @@ class PlayListModel;
 class TrackList;
 class WindowMagnet;
 class ConsoleTitle;
+class CompactDisplay;
 
 class ClassicWindow : public QMainWindow
 {
@@ -33,6 +34,8 @@ private:
     QWidget *createDeck();
     QWidget *createCompactBar();
     void setCompactMode(bool compact);
+    void saveLayout() const;
+    void saveCompactPosition() const;
     QWidget *createPlaylist();
     QWidget *createLyrics();
     void togglePlayback();
@@ -53,13 +56,15 @@ private:
     ConsoleKey *m_play;
     QWidget *m_deck, *m_compactBar;
     ConsoleKey *m_compactPlay;
-    QLabel *m_compactTitle;
+    CompactDisplay *m_compactTitle;
+    bool m_savedOnClose = false;
     QByteArray m_normalGeometry, m_normalDocks, m_minimizedDocks;
     QRect m_normalRect;
     QListView *m_list;
     QListWidget *m_collections;
     TrackList *m_tracks;
     PlayListModel *m_playlist = nullptr;
+    LyricsLoader m_lyricsLoader;
     SyncedLyrics m_lyrics;
     QString m_path;
     int m_line = -2;

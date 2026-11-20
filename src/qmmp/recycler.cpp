@@ -111,12 +111,12 @@ Buffer *Recycler::next()
 
 void Recycler::done()
 {
-    m_blocked = nullptr;
-    if (m_current_count)
+    if (m_current_count && m_buffers[m_done_index] == m_blocked)
     {
         m_current_count--;
         m_done_index = (m_done_index + 1) % m_buffer_count;
     }
+    m_blocked = nullptr;
 }
 
 void Recycler::clear()

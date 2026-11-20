@@ -99,21 +99,28 @@ void OutputWriter::pause()
 
 void OutputWriter::stop()
 {
+    QMutexLocker lock(recycler()->mutex());
     m_user_stop = true;
+    recycler()->cond()->wakeAll();
 }
 
 void OutputWriter::finish()
 {
+    QMutexLocker lock(recycler()->mutex());
     m_finish = true;
+    recycler()->cond()->wakeAll();
 }
 
 void OutputWriter::seek(qint64 pos, bool reset)
 {
-    m_mutex.lock();
-    m_totalWritten = pos * m_bytesPerSecond / 1000;
-    m_currentMilliseconds = -1;
-    m_skip = isRunning() && reset;
-    m_mutex.unlock();
+    QMutexLocker lock(recycler()->mutex());
+    m_pendingPosition = pos;
+    if(reset)
+    {
+        recycler()->clear();
+        m_skip = true;
+    }
+    recycler()->cond()->wakeAll();
 }
 
 Recycler *OutputWriter::recycler()
@@ -237,7 +244,6 @@ void OutputWriter::run()
 
     while(!done)
     {
-        m_mutex.lock ();
         if(m_pause != m_paused)
         {
             m_paused = m_pause;
@@ -245,24 +251,36 @@ void OutputWriter::run()
             {
                 Visual::clearBuffer();
                 m_output->suspend();
-                m_mutex.unlock();
-                continue;
             }
-            m_output->resume();
+            else
+                m_output->resume();
         }
-        recycler()->mutex()->lock ();
+        recycler()->mutex()->lock();
         done = m_user_stop || (m_finish && recycler()->empty());
-
-        while(!done && (recycler()->empty() || m_pause))
+        if(done)
         {
-            recycler()->cond()->wakeOne();
-            m_mutex.unlock();
+            recycler()->mutex()->unlock();
+            break;
+        }
+        if(m_paused != m_pause)
+        {
+            recycler()->mutex()->unlock();
+            continue;
+        }
+        if(recycler()->empty() || m_paused)
+        {
             recycler()->cond()->wait(recycler()->mutex());
-            m_mutex.lock ();
-            done = m_user_stop || m_finish;
+            recycler()->mutex()->unlock();
+            continue;
         }
 
-        status();
+        if(m_pendingPosition >= 0)
+        {
+            m_totalWritten = m_pendingPosition * m_bytesPerSecond / 1000;
+            m_currentMilliseconds = -1;
+            m_pendingPosition = -1;
+        }
+        const bool resetDevice = m_skip.exchange(false);
         if (!b)
         {
             if((b = recycler()->next()))
@@ -280,7 +298,12 @@ void OutputWriter::run()
 
         recycler()->cond()->wakeOne();
         recycler()->mutex()->unlock();
-        m_mutex.unlock();
+        if(resetDevice)
+        {
+            Visual::clearBuffer();
+            m_output->reset();
+        }
+        status();
         if (b)
         {
             m_mutex.lock();
@@ -316,18 +339,8 @@ void OutputWriter::run()
             }
             output_at = b->samples * m_output->sampleSize();
 
-            while (l < output_at && !m_pause && !m_paused)
+            while(l < output_at && !m_pause && !m_skip && !m_user_stop)
             {
-                m_mutex.lock();
-                if(m_skip)
-                {
-                    m_skip = false;
-                    Visual::clearBuffer();
-                    m_output->reset();
-                    m_mutex.unlock();
-                    break;
-                }
-                m_mutex.unlock();
                 m = m_output->writeAudio(tmp + l, output_at - l);
                 if(m >= 0)
                 {
@@ -337,23 +350,29 @@ void OutputWriter::run()
                 else
                     break;
             }
-            if(m < 0)
-                break;
+
         }
         //force buffer change
         recycler()->mutex()->lock ();
         recycler()->done();
+        if(m < 0)
+        {
+            m_failed = true;
+            done = true;
+            qCWarning(core) << "audio output write failed";
+        }
+        recycler()->cond()->wakeAll();
         recycler()->mutex()->unlock();
         b = nullptr;
     }
     m_mutex.lock();
     //write remaining data
-    if(m_finish)
+    if(m_finish && !m_failed)
     {
         m_output->drain();
         qCDebug(core) << "total written" << m_totalWritten;
     }
-    dispatch(Qmmp::Stopped);
+    dispatch(m_failed ? Qmmp::FatalError : Qmmp::Stopped);
     stopVisualization();
     m_mutex.unlock();
 }

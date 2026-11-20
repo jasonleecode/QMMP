@@ -72,6 +72,7 @@ private:
     void run() override;
     void reset();
     void clearDecoders();
+    void waitForOutput();
     void flush(bool = false);
     void addOffset();
     qint64 produceSound(unsigned char *data, qint64 size, quint32 brate);
@@ -87,6 +88,7 @@ private:
     std::atomic_bool m_done, m_finish, m_user_stop;
     uint m_bks = 0, m_sample_size = 0;
     qint64 m_seekTime;
+    bool m_resetOnSeek = false;
     quint64 m_output_at, m_output_size = 0;
     int m_bitrate;
     unsigned char *m_output_buf = nullptr;

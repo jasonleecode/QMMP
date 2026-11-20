@@ -126,6 +126,7 @@ void Decoder::loadPlugins()
 
     m_cache = new QList<QmmpPluginCache*>;
     QSettings settings;
+    QHash<QString, QmmpPluginCache *> byName;
     for(const QString &filePath : Qmmp::findPlugins(u"Input"_s))
     {
         QmmpPluginCache *item = new QmmpPluginCache(filePath, &settings);
@@ -134,6 +135,19 @@ void Decoder::loadPlugins()
             delete item;
             continue;
         }
+        if(auto *previous = byName.value(item->shortName()))
+        {
+            // The user directory is scanned first. Fall back if a cached library no longer loads.
+            if(previous->decoderFactory())
+            {
+                qCDebug(core) << "decoder" << item->file() << "shadowed by" << previous->file();
+                delete item;
+                continue;
+            }
+            m_cache->removeOne(previous);
+            delete previous;
+        }
+        byName.insert(item->shortName(), item);
         m_cache->append(item);
     }
     m_disabledNames = settings.value(u"Decoder/disabled_plugins"_s).toStringList();

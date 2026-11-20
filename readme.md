@@ -29,7 +29,7 @@ ctest --test-dir build-classic --output-on-failure
 - 播放列表上方第四个按钮切换顺序播放和随机播放，保留曲目的显示顺序。第三个按钮用于排序或反转列表。
 - 点击主机左侧的频谱，依次切换频谱柱、时域波形和左右声道电平。键盘聚焦到该区域后按回车也可切换。暂停、停止或最小化时，可视化停止刷新。
 - 点击时间读数可切换已播放时间与剩余时间。静音时，音量键的喇叭上会出现斜杠。
-- 点击主机右上角紧邻最小化键的迷你模式按钮，播放器会收成屏幕右上角的置顶横条。按住歌名或空白处即可拖动，右侧按钮可切歌、暂停，或还原之前的窗口布局。[迷你模式截图](doc/classic-mini.png)
+- 点击主机右上角紧邻最小化键的迷你模式按钮，播放器会收成置顶横条。左边是播放器图标，黄色背光屏从右往左滚动显示播放时间和曲名，右侧可切歌、播放、暂停、停止或还原。按住屏幕或空白处可拖动。第一次进入时位于右上角，之后会记住小窗位置、退出时的模式和普通窗口布局。[迷你模式截图](doc/classic-mini.png)
 - 顶部状态栏的播放器菜单显示当前曲目，点击曲名可打开播放器。菜单内可以暂停或继续、切歌、停止和静音。
 - 空格切换播放和暂停。主机上的 **PL**、**EQ** 和 **LRC** 分别显示或隐藏播放列表、均衡器和歌词。拖动标题栏可分离或吸附各窗；点击主机左上角音符，从「视图 → 磁吸排列」恢复纵向布局。
 - 均衡器提供前级增益和十段频率调节。点 **OFF/ON** 切换处理状态，点 **PRESETS** 应用预设，点 **RESET** 将增益归零。
@@ -43,7 +43,7 @@ ctest --test-dir build-classic --output-on-failure
 
 把歌词和歌曲放在同一目录，例如 `春天.flac` 与 `春天.lrc`。支持 UTF-8、GB18030、每行多个时间戳以及 `[offset:毫秒]`。拖动进度或切换歌曲会重新定位歌词。
 
-MPEG 和 FFmpeg 插件提供 MP3、M4A、FLAC、Ogg Vorbis 和 PCM WAV 支持。也可安装专用解码器。Linux 用户可以把与当前 Qt、Qmmp ABI 兼容的解码器放入 `${XDG_CONFIG_HOME:-$HOME/.config}/qmmp/plugins-2.3/Input/`，重启后加载。开发接口见 `src/qmmp/decoderfactory.h` 和 `src/qmmp/decoder.h`。扩展模块编译示例见 `src/plugins/Input/flac/`。
+MPEG 和 FFmpeg 插件提供 MP3、M4A、FLAC、Ogg Vorbis 和 PCM WAV 支持。也可安装专用解码器。Linux 用户可以把与当前 Qt、Qmmp ABI 兼容的解码器放入 `${XDG_CONFIG_HOME:-$HOME/.config}/qmmp/plugins-2.3/Input/`，重启后加载。同一短名优先使用可加载的用户版本。把鼠标悬停在设置中的解码器名称或文件名上可查看实际路径。开发接口见 `src/qmmp/decoderfactory.h` 和 `src/qmmp/decoder.h`。扩展模块编译示例见 `src/plugins/Input/flac/`。
 
 ## 打包
 

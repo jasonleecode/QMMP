@@ -1,4 +1,5 @@
 #include "syncedlyrics.h"
+#include <QtConcurrentRun>
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -71,4 +72,29 @@ int SyncedLyrics::indexAt(qint64 milliseconds) const
 QString SyncedLyrics::textAt(int index) const
 {
     return index >= 0 && index < m_lines.size() ? m_lines.at(index).text : QString();
+}
+
+LyricsLoader::LyricsLoader()
+{
+    connect(&m_watcher, &QFutureWatcher<SyncedLyrics>::finished, this, [this] {
+        const QString finished = m_loading;
+        m_loading.clear();
+        if(finished == m_requested)
+            emit loaded(m_watcher.result());
+        else
+            request(m_requested);
+    });
+}
+
+void LyricsLoader::request(const QString &path)
+{
+    m_requested = path;
+    if(path.isEmpty() || !m_loading.isEmpty())
+        return;
+    m_loading = path;
+    m_watcher.setFuture(QtConcurrent::run([path] {
+        SyncedLyrics lyrics;
+        lyrics.loadForTrack(path);
+        return lyrics;
+    }));
 }

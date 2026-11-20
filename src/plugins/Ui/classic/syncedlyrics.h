@@ -3,6 +3,7 @@
 
 #include <QString>
 #include <QList>
+#include <QFutureWatcher>
 
 struct LyricLine
 {
@@ -21,6 +22,19 @@ public:
 
 private:
     QList<LyricLine> m_lines;
+};
+
+class LyricsLoader final : public QObject
+{
+    Q_OBJECT
+public:
+    LyricsLoader();
+    void request(const QString &path);
+signals:
+    void loaded(const SyncedLyrics &lyrics);
+private:
+    QString m_requested, m_loading;
+    QFutureWatcher<SyncedLyrics> m_watcher;
 };
 
 #endif

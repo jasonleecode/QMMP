@@ -87,6 +87,16 @@ int main(int argc, char **argv)
     CHECK(linkPlugin(argv[3], root + "/Input"));
     CHECK(linkPlugin(argv[4], Qmmp::configDir() + "/plugins-2.3/Input"));
     CHECK(linkPlugin(argv[5], root + "/Output"));
+    const QString systemCopy = root + "/Input/system-ffmpeg.so";
+    CHECK(QFile::copy(argv[4], systemCopy));
+    int ffmpegCount = 0;
+    for(auto *decoder : Decoder::factories())
+        if(decoder->properties().shortName == "ffmpeg")
+        {
+            ++ffmpegCount;
+            CHECK(Decoder::file(decoder) == QFileInfo(argv[4]).canonicalFilePath());
+        }
+    CHECK(ffmpegCount == 1);
 
     QString music;
     QStringList samples;
@@ -378,6 +388,7 @@ int main(int argc, char **argv)
             CHECK(window->pos() == before + delta);
         }
     }
+    CHECK(waitFor([&] { return barTitle->text() == "春天" && barTitle->accessibleName().contains("00:"); }));
     if(argc >= 8)
         CHECK(window->grab().save(QDir(argv[7]).filePath("classic-mini.png")));
     auto barButton = [&](const QString &name) -> QToolButton * {
@@ -389,6 +400,10 @@ int main(int argc, char **argv)
     CHECK(barButton("下一首") && barButton("上一首") && barButton("还原主窗口"));
     CHECK(waitFor([&] { return barButton("暂停") != nullptr; }));
     const QPoint compactPosition = window->pos();
+    barButton("还原主窗口")->click();
+    compact->click();
+    CHECK(window->pos() == compactPosition);
+    CHECK(barTitle->accessibleName().contains(barTitle->text()));
     clickWidget(barButton("下一首"));
     CHECK(waitFor([&] { return barTitle->text() == "下一曲"; }));
     CHECK(window->pos() == compactPosition);
@@ -435,8 +450,10 @@ int main(int argc, char **argv)
     {
         dock->setFloating(floating);
         const int count = list->model()->rowCount();
+        list->setCurrentIndex(list->model()->index(1, 0));
         CHECK(dropTrack(list->viewport()));
         CHECK(waitFor([&] { return list->model()->rowCount() == count + 1; }));
+        CHECK(list->currentIndex().row() == 1);
         CHECK(core->state() == Qmmp::Playing && title->text() == "春天");
     }
     clickWidget(clock);
@@ -461,11 +478,23 @@ int main(int argc, char **argv)
     QSettings().setValue("Classic/skinFiles", QStringList{skinFile});
     QSettings().setValue("Classic/skin",skinFile);
     clickWidget(visual);
+    const QRect savedNormalFrame = window->frameGeometry();
+    compact->click();
+    window->move(compactPosition);
     ui.reset();
     ui.reset(factory->create());
     window = qobject_cast<QMainWindow *>(ui.get());
-    CHECK(window && window->property("spectrumColor") == "#88aa77");
+    CHECK(window && window->findChild<QWidget *>("compactBar")->isVisible() && window->pos() == compactPosition);
+    CHECK(window->property("spectrumColor") == "#88aa77");
     CHECK(window->findChild<QWidget *>("visualization")->accessibleName() == "时域波形");
     CHECK(window->styleSheet().contains("#77aa88"));
+    for(auto *key : window->findChild<QWidget *>("compactBar")->findChildren<QToolButton *>())
+        if(key->accessibleName() == "还原主窗口")
+            key->click();
+    CHECK(window->frameGeometry() == savedNormalFrame);
+    QSettings().setValue("Classic/compactScreen", "disconnected-test-screen");
+    QSettings().setValue("Classic/compactOffset", QPoint(100000, 100000));
+    window->findChild<QToolButton *>("compactMode")->click();
+    CHECK(window->frameGeometry().bottomRight() == window->screen()->availableGeometry().bottomRight());
     return 0;
 }
