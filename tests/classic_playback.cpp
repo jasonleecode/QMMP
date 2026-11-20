@@ -502,6 +502,14 @@ int main(int argc, char **argv)
         CHECK(list->currentIndex().row() == 1);
         CHECK(core->state() == Qmmp::Playing && title->text() == "春天");
     }
+    auto *playlist = PlayListManager::instance()->selectedPlayList();
+    list->setCurrentIndex(list->model()->index(2, 0));
+    const QPersistentModelIndex retained(list->currentIndex());
+    auto *browsed = playlist->track(2);
+    playlist->removeTracks(QList<PlayListTrack *>{playlist->track(1), playlist->track(3)});
+    CHECK(playlist->trackCount() == 2 && playlist->track(1) == browsed);
+    CHECK(retained.isValid() && retained.row() == 1 && list->currentIndex() == retained);
+    CHECK(title->text() == "春天" && core->state() == Qmmp::Playing);
     clickWidget(clock);
     CHECK(dropTrack(title));
     CHECK(waitFor([&] { return title->text() == "雨声" && current->text() == "雨声响起"; }));

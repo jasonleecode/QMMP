@@ -1,4 +1,6 @@
 #include "tracklist.h"
+#include <QSet>
+#include <algorithm>
 #include <qmmpui/playlistmanager.h>
 #include <qmmpui/playlisttrack.h>
 
@@ -36,14 +38,41 @@ void TrackList::syncStructure()
     }
     else if(oldSize != newSize)
     {
-        beginRemoveRows({}, first, first+removed-1);
-        m_rows.remove(first, removed);
-        endRemoveRows();
-        beginInsertRows({}, first, first+added-1);
-        m_rows = rows;
-        endInsertRows();
+        // A bulk edit can leave selected tracks between two disjoint removals.
+        const QSet<PlayListTrack *> wanted(rows.cbegin()+first, rows.cbegin()+first+added);
+        for(int end = first+removed; end > first;)
+        {
+            int start = end;
+            while(start > first && !wanted.contains(m_rows.at(start-1)))
+                --start;
+            if(start < end)
+            {
+                beginRemoveRows({}, start, end-1);
+                m_rows.remove(start, end-start);
+                endRemoveRows();
+            }
+            end = start-1;
+        }
+        if(m_rows.size() < newSize)
+        {
+            const QSet<PlayListTrack *> kept(m_rows.cbegin()+first, m_rows.cend()-suffix);
+            for(int start = first; start < first+added;)
+            {
+                int end = start;
+                while(end < first+added && !kept.contains(rows.at(end)))
+                    ++end;
+                if(start < end)
+                {
+                    beginInsertRows({}, start, end-1);
+                    m_rows.insert(start, end-start, nullptr);
+                    std::copy_n(rows.cbegin()+start, end-start, m_rows.begin()+start);
+                    endInsertRows();
+                }
+                start = end+1;
+            }
+        }
     }
-    else
+    if(m_rows != rows)
     {
         // A sort or a multi-range edit can move the selection and the scroll anchor.
         emit layoutAboutToBeChanged();
@@ -68,16 +97,17 @@ int TrackList::rowCount(const QModelIndex &parent) const
 
 QVariant TrackList::data(const QModelIndex &index, int role) const
 {
-    if(!m_playlist || !index.isValid() || index.row() >= m_playlist->trackCount())
+    if(!m_playlist || !index.isValid() || index.row() >= m_rows.size())
         return {};
-    const auto *track = m_playlist->track(index.row());
-    if(!track)
+    auto *track = m_rows.at(index.row());
+    // The source has already applied the whole edit when Qt requests an intermediate row.
+    if(m_playlist->track(index.row()) != track && !m_playlist->tracks().contains(track))
         return {};
     switch(role)
     {
     case Qt::UserRole + 1:
         return m_playlist == PlayListManager::instance()->currentPlayList() &&
-               index.row() == m_playlist->currentIndex();
+               track == m_playlist->currentTrack();
     case Qt::UserRole: return track->duration();
     case Qt::ToolTipRole: return track->path();
     case Qt::DisplayRole: return track->formattedTitle(0);
