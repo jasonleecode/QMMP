@@ -17,14 +17,6 @@ bool applySkin(QWidget *window, const QString &path)
     if(!base.open(QIODevice::ReadOnly) || values.value("Skin/Name").toString().isEmpty())
         return false;
     QString sheet = QString::fromUtf8(base.readAll());
-    for(const QString &key : {"edge","shadow","body","metal","shine","display","glow",
-                              "accent","spectrum","text","muted"})
-    {
-        const QColor color(values.value("Colors/" + key).toString());
-        if(!color.isValid())
-            return false;
-        sheet.replace("@" + key + "@", color.name());
-    }
     const QString extension = values.value("Skin/Style").toString();
     if(!extension.isEmpty())
     {
@@ -33,6 +25,14 @@ bool applySkin(QWidget *window, const QString &path)
             return false;
         QString custom = QString::fromUtf8(extra.readAll());
         sheet += QChar::LineFeed + custom.replace("@SKIN_DIR@", QFileInfo(path).absolutePath());
+    }
+    for(const QString &key : {"edge","shadow","body","metal","shine","display","glow",
+                              "accent","spectrum","text","muted"})
+    {
+        const QColor color(values.value("Colors/" + key).toString());
+        if(!color.isValid())
+            return false;
+        sheet.replace("@" + key + "@", color.name());
     }
     auto color = [&](const QString &name) { return QColor(values.value("Colors/" + name).toString()); };
     QPalette palette = window->palette();
@@ -73,7 +73,8 @@ void installClassicSkins(QWidget *window, QMenu *menu)
         menu->addAction(action);
         return action;
     };
-    QStringList files = {defaultSkin, QStringLiteral(":/classic/skins/midnight.ini")};
+    QStringList files = {defaultSkin, QStringLiteral(":/classic/skins/midnight.ini"),
+                         QStringLiteral(":/classic/skins/obsidian.ini")};
     files += settings.value("Classic/skinFiles").toStringList();
     files.removeDuplicates();
     for(const QString &file : files)

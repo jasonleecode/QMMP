@@ -1,0 +1,44 @@
+QWidget#chrome, QWidget#compactBar {
+    background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #2e3033,stop:.42 @body@,stop:1 @shadow@);
+    border-top:1px solid #45484c;
+    border-bottom:1px solid @edge@;
+    border-left:2px solid @accent@;
+}
+QWidget#chrome QLabel#caption, QLabel#compactTitle { color:@text@; }
+QToolButton#medallion {background:@edge@;border:1px solid @accent@;color:@spectrum@;}
+QWidget#readout {
+    background:@display@;border:1px solid @edge@;border-bottom-color:@metal@;
+}
+QWidget#readout QLabel#clock {color:@spectrum@;}
+QWidget#display {
+    border:1px solid @edge@;border-bottom-color:@metal@;
+    background:qlineargradient(x1:0,y1:1,x2:1,y2:0,stop:0 #131313,stop:.54 #181712,stop:1 @display@);
+}
+QWidget#transport, QWidget#listTools {
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #2d3034,stop:.55 @body@,stop:1 #131416);
+    border-top:1px solid @metal@;
+}
+QToolButton, QPushButton, QToolButton#libraryKey {
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 @metal@,stop:1 @shadow@);
+    border:1px solid @edge@;border-top-color:#5b6065;
+}
+QToolButton#round, QToolButton#play {
+    background:qradialgradient(cx:.46,cy:.34,radius:.74,fx:.44,fy:.28,stop:0 #484b4d,stop:.57 #2a2c2e,stop:.79 @shadow@,stop:1 @metal@);
+}
+QToolButton#play {border:2px solid @accent@;color:@spectrum@;}
+QToolButton#consoleKey:checked, QToolButton#mute:checked, QWidget#listTools QToolButton:checked {
+    background:@glow@;color:@spectrum@;border:1px solid @accent@;
+}
+QToolButton:hover, QPushButton:hover, QToolButton#libraryKey:hover,
+QToolButton#round:hover, QToolButton#play:hover {border-color:@spectrum@;}
+QToolButton:pressed, QPushButton:pressed, QToolButton#round:pressed, QToolButton#play:pressed {background:@glow@;}
+QSlider::groove:horizontal, QSlider::groove:vertical {background:@edge@;border:1px solid @metal@;}
+QSlider::handle:horizontal, QSlider::handle:vertical {
+    border:1px solid #786342;
+    background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #d6cab4,stop:.43 #938879,stop:.48 #49443e,stop:.62 #292a2c,stop:1 @metal@);
+}
+QSlider#progress::handle:horizontal {background:@spectrum@;border:1px solid @accent@;}
+QListView#tracks, QListWidget#collections, QWidget#lyricPanel {background:@shadow@;}
+QListView#tracks, QListWidget#collections {color:@text@;border:1px solid @edge@;}
+QWidget#lyricPanel QLabel#activeLyric {color:@spectrum@;}
+QWidget#lyricPanel QLabel#nearLyric {color:@muted@;}

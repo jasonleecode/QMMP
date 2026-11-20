@@ -257,13 +257,20 @@ int main(int argc, char **argv)
     CHECK(rock);
     rock->trigger();
     CHECK(core->eqSettings().isEnabled() && band->value() == core->eqSettings().gain(4));
-    QAction *blue = nullptr, *violet = nullptr;
+    QAction *blue = nullptr, *violet = nullptr, *obsidian = nullptr;
     for(auto *action : window->findChildren<QAction *>())
     {
         if(action->data() == ":/classic/skins/midnight.ini") blue = action;
         if(action->data() == ":/classic/skins/violet.ini") violet = action;
+        if(action->data() == ":/classic/skins/obsidian.ini") obsidian = action;
     }
-    CHECK(blue && violet);
+    CHECK(blue && violet && obsidian && obsidian->text() == "曜石黑");
+    obsidian->trigger();
+    CHECK(obsidian->isChecked() && QSettings().value("Classic/skin") == obsidian->data());
+    CHECK(window->property("spectrumColor").toString() == "#ffbf62");
+    CHECK(clock->palette().color(QPalette::WindowText) == QColor("#ffbf62"));
+    CHECK(list->palette().color(QPalette::Base) == QColor("#101113"));
+    CHECK(current->palette().color(QPalette::WindowText) == QColor("#ffbf62"));
     blue->trigger();
     CHECK(window->property("spectrumColor").toString() == "#89e6db");
     violet->trigger();
@@ -276,13 +283,22 @@ int main(int argc, char **argv)
         QRect bounds;
         for(auto *panel : panels)
             bounds |= panel->frameGeometry();
-        QImage image(bounds.size(),QImage::Format_ARGB32_Premultiplied);
-        image.fill(Qt::transparent);
-        QPainter painter(&image);
-        for(auto *panel : panels)
-            painter.drawPixmap(panel->frameGeometry().topLeft()-bounds.topLeft(),panel->grab());
-        painter.end();
-        CHECK(image.save(QString::fromLocal8Bit(argv[6])));
+        auto savePanels = [&](const QString &path) {
+            QImage image(bounds.size(),QImage::Format_ARGB32_Premultiplied);
+            image.fill(Qt::transparent);
+            QPainter painter(&image);
+            for(auto *panel : panels)
+                painter.drawPixmap(panel->frameGeometry().topLeft()-bounds.topLeft(),panel->grab());
+            painter.end();
+            return image.save(path);
+        };
+        CHECK(savePanels(QString::fromLocal8Bit(argv[6])));
+        if(argc >= 8)
+        {
+            obsidian->trigger();
+            CHECK(savePanels(QDir(argv[7]).filePath("classic-obsidian.png")));
+            violet->trigger();
+        }
     }
     auto *library = window->findChild<QToolButton *>("libraryKey");
     CHECK(library);
@@ -293,6 +309,8 @@ int main(int argc, char **argv)
     auto *results = search->findChild<QListView *>("songsListView");
     CHECK(input && results && results->model()->rowCount() > 0);
     CHECK(input->palette().color(QPalette::Base) == QColor("#11101f"));
+    obsidian->trigger();
+    CHECK(input->palette().color(QPalette::Base) == QColor("#101113"));
     blue->trigger();
     CHECK(input->palette().color(QPalette::Base) != QColor("#11101f"));
     violet->trigger();
