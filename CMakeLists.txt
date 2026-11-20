@@ -297,6 +297,18 @@ endif(MPEG_DECODERS)
 message("")
 
 include(CTest)
+if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET qtmultimedia)
+    find_program(PULSEAUDIO_EXECUTABLE pulseaudio)
+    find_program(DBUS_RUN_SESSION_EXECUTABLE dbus-run-session)
+    if(PULSEAUDIO_EXECUTABLE AND DBUS_RUN_SESSION_EXECUTABLE)
+        add_executable(qtmultimedia_seek_test tests/qtmultimedia_seek.cpp)
+        target_link_libraries(qtmultimedia_seek_test PRIVATE Qt6::Widgets Qt6::Multimedia libqmmp)
+        add_test(NAME qtmultimedia_seek COMMAND ${DBUS_RUN_SESSION_EXECUTABLE} --
+                 $<TARGET_FILE:qtmultimedia_seek_test> ${PULSEAUDIO_EXECUTABLE} $<TARGET_FILE:qtmultimedia>)
+        set_tests_properties(qtmultimedia_seek PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                             SKIP_RETURN_CODE 77 TIMEOUT 20)
+    endif()
+endif()
 if(BUILD_TESTING AND TARGET classic)
     add_executable(windowmagnet_test tests/windowmagnet.cpp src/plugins/Ui/classic/windowmagnet.cpp)
     target_link_libraries(windowmagnet_test PRIVATE Qt6::Widgets)

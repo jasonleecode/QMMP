@@ -61,6 +61,7 @@ public:
     QAudioSink *output = nullptr;
     QIODevice *buffer = nullptr;
     std::atomic_bool restarting{false};
+    void start();
 
 public slots:
     void suspend();

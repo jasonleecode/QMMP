@@ -116,8 +116,7 @@ bool OutputQtMultimedia::initialize(quint32 freq, ChannelMap map, Qmmp::AudioFor
 
     m_control = new OutputControl;
     m_output = m_control->output = new QAudioSink(device_info, qformat, m_control);
-    m_output->setBufferSize(4096);
-    m_control->buffer = m_output->start();
+    m_control->start();
     if(!m_control->buffer)
         return false;
 
@@ -188,9 +187,17 @@ void OutputControl::resume()
     output->resume();
 }
 
+void OutputControl::start()
+{
+    // Qt may replace the requested size with the device's negotiated size on start.
+    // Request the same 24 ms of audio on every open, including after a seek.
+    output->setBufferSize(output->format().bytesForDuration(24000));
+    buffer = output->start();
+}
+
 void OutputControl::restart()
 {
     output->reset();
-    buffer = output->start();
+    start();
     restarting = false;
 }
