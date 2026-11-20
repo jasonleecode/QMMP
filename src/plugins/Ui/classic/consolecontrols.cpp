@@ -153,7 +153,7 @@ void ConsoleKey::paintEvent(QPaintEvent *)
 }
 
 ConsoleTitle::ConsoleTitle(const QString &title, QWidget *owner, QMenu *playerMenu) :
-    QWidget(owner), m_owner(owner), m_main(playerMenu != nullptr)
+    WindowDragArea(owner, playerMenu || qobject_cast<QDialog *>(owner)), m_main(playerMenu != nullptr)
 {
     setObjectName("chrome");
     setAttribute(Qt::WA_StyledBackground);
@@ -193,21 +193,31 @@ ConsoleTitle::ConsoleTitle(const QString &title, QWidget *owner, QMenu *playerMe
     add(ConsoleKey::Close, tr("关闭"), [owner] { owner->close(); })->setObjectName("closeKey");
 }
 
-void ConsoleTitle::mousePressEvent(QMouseEvent *e)
+WindowDragArea::WindowDragArea(QWidget *parent, bool draggable) : QWidget(parent), m_draggable(draggable)
+{}
+
+void WindowDragArea::mousePressEvent(QMouseEvent *e)
 {
-    if((m_main || qobject_cast<QDialog *>(m_owner)) && e->button() == Qt::LeftButton)
+    if(m_draggable && e->button() == Qt::LeftButton)
     {
-        m_offset = e->globalPosition().toPoint() - m_owner->frameGeometry().topLeft();
-        m_manualDrag = !m_owner->windowHandle() || !m_owner->windowHandle()->startSystemMove();
+        auto *owner = window();
+        m_offset = e->globalPosition().toPoint() - owner->frameGeometry().topLeft();
+        m_manualDrag = !owner->windowHandle() || !owner->windowHandle()->startSystemMove();
         e->accept();
     }
     else e->ignore(); // QDockWidget handles dragging its custom title bar.
 }
-void ConsoleTitle::mouseMoveEvent(QMouseEvent *e)
+void WindowDragArea::mouseMoveEvent(QMouseEvent *e)
 {
-    if(m_manualDrag && !m_owner->isMaximized() && e->buttons().testFlag(Qt::LeftButton))
-        m_owner->move(e->globalPosition().toPoint() - m_offset);
+    if(m_manualDrag && !window()->isMaximized() && e->buttons().testFlag(Qt::LeftButton))
+        window()->move(e->globalPosition().toPoint() - m_offset);
     else e->ignore();
+}
+void WindowDragArea::mouseReleaseEvent(QMouseEvent *e)
+{
+    if(e->button() == Qt::LeftButton)
+        m_manualDrag = false;
+    QWidget::mouseReleaseEvent(e);
 }
 void ConsoleTitle::mouseDoubleClickEvent(QMouseEvent *e)
 {

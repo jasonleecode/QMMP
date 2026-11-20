@@ -330,6 +330,28 @@ int main(int argc, char **argv)
     CHECK(waitFor([&] { return bar->isVisible() && window->height() == 32 &&
                                window->frameGeometry().topRight() == window->screen()->availableGeometry().topRight(); }));
     CHECK(!eqDock->isVisible() && !listDock->isVisible() && !lyricDock->isVisible());
+    // Offscreen has no window manager, so pointer events exercise the manual move fallback.
+    if(QGuiApplication::platformName() == "offscreen")
+    {
+        const QPoint titlePoint = barTitle->mapTo(window, barTitle->rect().center());
+        const QPoint marginPoint = bar->mapTo(window, QPoint(3, bar->height() / 2));
+        for(const QPoint &point : {titlePoint, marginPoint})
+        {
+            QWidget *hit = window->childAt(point);
+            CHECK(hit == bar);
+            const QPoint before = window->pos();
+            const QPoint delta(-35, 25);
+            const QPoint start = window->mapToGlobal(point);
+            auto send = [&](QEvent::Type type, QPoint global, Qt::MouseButton button, Qt::MouseButtons buttons) {
+                QMouseEvent e(type, hit->mapFromGlobal(global), global, button, buttons, {});
+                QApplication::sendEvent(hit, &e);
+            };
+            send(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton);
+            send(QEvent::MouseMove, start + delta, Qt::NoButton, Qt::LeftButton);
+            send(QEvent::MouseButtonRelease, start + delta, Qt::LeftButton, Qt::NoButton);
+            CHECK(window->pos() == before + delta);
+        }
+    }
     if(argc >= 8)
         CHECK(window->grab().save(QDir(argv[7]).filePath("classic-mini.png")));
     auto barButton = [&](const QString &name) -> QToolButton * {
@@ -338,9 +360,12 @@ int main(int argc, char **argv)
                 return key;
         return nullptr;
     };
-    CHECK(barButton("下一首") && barButton("上一首") && barButton("暂停") && barButton("还原主窗口"));
-    barButton("下一首")->click();
+    CHECK(barButton("下一首") && barButton("上一首") && barButton("还原主窗口"));
+    CHECK(waitFor([&] { return barButton("暂停") != nullptr; }));
+    const QPoint compactPosition = window->pos();
+    clickWidget(barButton("下一首"));
     CHECK(waitFor([&] { return barTitle->text() == "下一曲"; }));
+    CHECK(window->pos() == compactPosition);
     barButton("上一首")->click();
     CHECK(waitFor([&] { return barTitle->text() == "春天"; }));
     barButton("暂停")->click();

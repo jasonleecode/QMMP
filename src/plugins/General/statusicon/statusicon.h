@@ -30,6 +30,7 @@
 class SoundCore;
 class MediaPlayer;
 class QEvent;
+class QAction;
 class QMenu;
 
 /**
@@ -49,6 +50,10 @@ private slots:
     void trayActivated(QSystemTrayIcon::ActivationReason);
 
 private:
+    void updateMenuTrack();
+    QAction *m_trackAction;
+    QAction *m_playPauseAction;
+    QAction *m_stopAction;
     QmmpTrayIcon *m_tray;
     bool m_showMessage;
     bool m_useStandardIcons;

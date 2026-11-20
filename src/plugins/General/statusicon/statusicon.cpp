@@ -19,6 +19,7 @@
  ***************************************************************************/
 
 #include <QMenu>
+#include <QMainWindow>
 #include <QSettings>
 #include <QDir>
 #include <QTimer>
@@ -59,22 +60,54 @@ StatusIcon::StatusIcon(QObject *parent) : QObject(parent)
     else
         m_tray->setIcon(QIcon(u":/tray_stop.png"_s));
     settings.endGroup();
-    //actions
     m_menu = new QMenu();
-    QIcon playIcon = QApplication::style()->standardIcon(QStyle::SP_MediaPlay);
-    QIcon pauseIcon = QApplication::style()->standardIcon(QStyle::SP_MediaPause);
-    QIcon stopIcon = QApplication::style()->standardIcon(QStyle::SP_MediaStop);
-    QIcon nextIcon = QApplication::style()->standardIcon(QStyle::SP_MediaSkipForward);
-    QIcon previousIcon = QApplication::style()->standardIcon(QStyle::SP_MediaSkipBackward);
-    QIcon exitIcon = QIcon::fromTheme(u"application-exit"_s);
-    m_menu->addAction(playIcon, tr("Play"), m_player, &MediaPlayer::play);
-    m_menu->addAction(pauseIcon, tr("Pause"), m_player, &MediaPlayer::pause);
-    m_menu->addAction(stopIcon, tr("Stop"), m_player, &MediaPlayer::stop);
+    m_menu->setObjectName(u"trayMenu"_s);
+    m_menu->setMinimumWidth(220);
+    m_menu->setStyleSheet(QStringLiteral(
+        "QMenu#trayMenu { background:palette(window); color:palette(window-text); "
+        "border:1px solid palette(mid); padding:5px; }"
+        "QMenu#trayMenu::item { padding:6px 18px 6px 30px; border-radius:3px; }"
+        "QMenu#trayMenu::item:selected { background:palette(highlight); color:palette(highlighted-text); }"
+        "QMenu#trayMenu::item:disabled { color:palette(mid); }"
+        "QMenu#trayMenu::separator { height:1px; background:palette(mid); margin:4px 7px; }"));
+    connect(m_menu, &QMenu::aboutToShow, this, [this] {
+        for(auto *widget : QApplication::topLevelWidgets())
+            if(qobject_cast<QMainWindow *>(widget))
+            {
+                m_menu->setPalette(widget->palette());
+                break;
+            }
+    });
+
+    auto *helper = UiHelper::instance();
+    m_trackAction = m_menu->addAction(QApplication::windowIcon(), tr("Open player"), helper, &UiHelper::showMainWindow);
+    QFont heading = m_menu->font();
+    heading.setBold(true);
+    m_trackAction->setFont(heading);
+    m_trackAction->setToolTip(tr("Open player"));
     m_menu->addSeparator();
-    m_menu->addAction(nextIcon, tr("Next"), m_player, &MediaPlayer::next);
-    m_menu->addAction(previousIcon, tr("Previous"), m_player, &MediaPlayer::previous);
+    m_playPauseAction = m_menu->addAction(tr("Play"), this, [this] {
+        if(m_core->state() == Qmmp::Playing)
+            m_player->pause();
+        else
+            m_player->play();
+    });
+    auto icon = [](const QString &name, QStyle::StandardPixmap fallback) {
+        return QIcon::fromTheme(name, QApplication::style()->standardIcon(fallback));
+    };
+    m_menu->addAction(icon(u"media-skip-backward-symbolic"_s, QStyle::SP_MediaSkipBackward),
+                      tr("Previous"), m_player, &MediaPlayer::previous);
+    m_menu->addAction(icon(u"media-skip-forward-symbolic"_s, QStyle::SP_MediaSkipForward),
+                      tr("Next"), m_player, &MediaPlayer::next);
+    m_stopAction = m_menu->addAction(icon(u"media-playback-stop-symbolic"_s, QStyle::SP_MediaStop),
+                                     tr("Stop"), m_player, &MediaPlayer::stop);
     m_menu->addSeparator();
-    m_menu->addAction(exitIcon, tr("Exit"), UiHelper::instance(), &UiHelper::exit);
+    auto *mute = m_menu->addAction(tr("Mute"), m_core, &SoundCore::setMuted);
+    mute->setCheckable(true);
+    mute->setChecked(m_core->isMuted());
+    connect(m_core, &SoundCore::mutedChanged, mute, &QAction::setChecked);
+    m_menu->addSeparator();
+    m_menu->addAction(QIcon::fromTheme(u"application-exit-symbolic"_s), tr("Exit"), helper, &UiHelper::exit);
     m_tray->setContextMenu(m_menu);
     m_tray->show();
     connect(m_core, &SoundCore::trackInfoChanged, this, &StatusIcon::showMetaData);
@@ -91,6 +124,12 @@ StatusIcon::~StatusIcon()
 
 void StatusIcon::setState(Qmmp::State state)
 {
+    const bool playing = state == Qmmp::Playing;
+    m_playPauseAction->setText(playing ? tr("Pause") : state == Qmmp::Paused ? tr("Resume") : tr("Play"));
+    m_playPauseAction->setIcon(QIcon::fromTheme(playing ? u"media-playback-pause-symbolic"_s : u"media-playback-start-symbolic"_s,
+            QApplication::style()->standardIcon(playing ? QStyle::SP_MediaPause : QStyle::SP_MediaPlay)));
+    m_stopAction->setEnabled(playing || state == Qmmp::Paused || state == Qmmp::Buffering);
+    updateMenuTrack();
     switch ((uint) state)
     {
     case Qmmp::Playing:
@@ -122,8 +161,28 @@ void StatusIcon::setState(Qmmp::State state)
     }
 }
 
+void StatusIcon::updateMenuTrack()
+{
+    QString text;
+    if(m_core->state() == Qmmp::Playing || m_core->state() == Qmmp::Paused)
+    {
+        const auto &info = m_core->trackInfo();
+        text = info.value(Qmmp::TITLE).simplified();
+        if(text.isEmpty())
+            text = QFileInfo(info.path()).completeBaseName();
+        const QString artist = info.value(Qmmp::ARTIST).simplified();
+        if(!text.isEmpty() && !artist.isEmpty())
+            text += u" · "_s + artist;
+    }
+    if(text.isEmpty())
+        text = tr("Open player");
+    text = QFontMetrics(m_trackAction->font()).elidedText(text, Qt::ElideRight, 260);
+    m_trackAction->setText(text.replace(u'&', u"&&"_s));
+}
+
 void StatusIcon::showMetaData()
 {
+    updateMenuTrack();
     TrackInfo info = m_core->trackInfo();
     if(m_splitFileName && info.value(Qmmp::TITLE).isEmpty() && !info.path().contains(u"://"_s))
     {

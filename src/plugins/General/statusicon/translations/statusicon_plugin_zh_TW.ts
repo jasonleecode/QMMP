@@ -4,6 +4,18 @@
 <context>
     <name>StatusIcon</name>
     <message>
+        <source>Open player</source>
+        <translation>開啟播放器</translation>
+    </message>
+    <message>
+        <source>Resume</source>
+        <translation>繼續播放</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>靜音</translation>
+    </message>
+    <message>
         <location filename="../statusicon.cpp" line="70"/>
         <source>Play</source>
         <translation>播放</translation>

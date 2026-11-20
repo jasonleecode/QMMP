@@ -388,13 +388,14 @@ QWidget *ClassicWindow::createDeck()
 
 QWidget *ClassicWindow::createCompactBar()
 {
-    auto *bar = new QWidget(this);
+    auto *bar = new WindowDragArea(this);
     bar->setObjectName("compactBar");
     auto *row = new QHBoxLayout(bar);
     row->setContentsMargins(8, 3, 4, 3);
     row->setSpacing(3);
     m_compactTitle = new QLabel(bar);
     m_compactTitle->setObjectName("compactTitle");
+    m_compactTitle->setAttribute(Qt::WA_TransparentForMouseEvents);
     m_compactTitle->setTextFormat(Qt::PlainText);
     m_compactTitle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     row->addWidget(m_compactTitle, 1);
@@ -621,7 +622,7 @@ void ClassicWindow::updateState()
         m_line = -2;
         m_title->setText(tr("尚未播放"));
         m_compactTitle->setText(m_title->text());
-        m_compactTitle->setToolTip({});
+        m_compactBar->setToolTip({});
         m_status->setText(tr("状态: 停止"));
         if(core->state() == Qmmp::NormalError)
             m_status->setText(tr("无法读取歌曲"));
@@ -642,7 +643,7 @@ void ClassicWindow::updateTrack()
     m_title->setText(artist.isEmpty() ? song : artist + QStringLiteral(" - ") + song);
     m_title->setToolTip(m_title->text());
     m_compactTitle->setText(m_title->text());
-    m_compactTitle->setToolTip(m_title->text());
+    m_compactBar->setToolTip(m_title->text());
     const int channels = core->audioParameters().channels();
     const QString mode = channels == 2 ? tr("立体声") : channels == 1 ? tr("单声道") : QString();
     m_status->setText((core->state() == Qmmp::Paused ? tr("状态: 暂停") : tr("状态: 播放"))

@@ -30,7 +30,21 @@ private:
     Glyph m_glyph;
 };
 
-class ConsoleTitle final : public QWidget
+class WindowDragArea : public QWidget
+{
+public:
+    explicit WindowDragArea(QWidget *parent, bool draggable = true);
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+private:
+    bool m_draggable;
+    bool m_manualDrag = false;
+    QPoint m_offset;
+};
+
+class ConsoleTitle final : public WindowDragArea
 {
     Q_OBJECT
 public:
@@ -39,13 +53,8 @@ public:
 signals:
     void compactRequested();
 protected:
-    void mousePressEvent(QMouseEvent *event) override;
-    void mouseMoveEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
 private:
-    QWidget *m_owner;
     bool m_main;
-    bool m_manualDrag = false;
-    QPoint m_offset;
 };
 #endif
