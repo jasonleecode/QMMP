@@ -178,16 +178,18 @@ void WindowMagnet::follow(int source)
         }
     // Compare outside edges: the main frame and a Qt tool window can have
     // different decoration margins under the same window manager.
-    if(target == 0 || (member == 0 && target > 0))
+    if(target >= 0)
     {
-        QWidget *panel = windows[target == 0 ? member : target];
-        const QRect main = windows[0]->frameGeometry();
+        // A dragged panel takes the target's width. When moving the player
+        // and its attached panels, keep that group's geometry as the anchor.
+        QWidget *panel = windows[source == 0 ? target : member];
+        const QRect anchor = windows[source == 0 ? member : target]->frameGeometry();
         const QRect before = panel->frameGeometry();
-        matchFrameWidth(panel, main.width());
-        if(before.bottom() + 1 == main.top() || before.top() == main.bottom() + 1)
-            panel->move(main.left(), before.top());
-        else if(before.right() + 1 == main.left())
-            panel->move(main.left() - panel->frameGeometry().width(), before.top());
+        matchFrameWidth(panel, anchor.width());
+        if(before.bottom() + 1 == anchor.top() || before.top() == anchor.bottom() + 1)
+            panel->move(anchor.left(), before.top());
+        else if(before.right() + 1 == anchor.left())
+            panel->move(anchor.left() - panel->frameGeometry().width(), before.top());
     }
     remember();
     adjusting = false;
