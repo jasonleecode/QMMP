@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <qmmp/metadatamanager.h>
 #include "metadatahelper_p.h"
+#include "coverloader_p.h"
 #include "playlistparser.h"
 #include "playlistformat.h"
 #include "playlistcontainer_p.h"

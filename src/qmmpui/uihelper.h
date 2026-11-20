@@ -26,6 +26,7 @@
 #include <QPointer>
 #include <QStringList>
 #include <QApplication>
+#include <QDialog>
 #include "playlistmanager.h"
 #include "playlistmodel.h"
 #include "qmmpui_export.h"
@@ -206,6 +207,8 @@ signals:
      * User interface should recreate widget with the given \b id.
      */
     void widgetUpdated(const QString &id);
+    /*! Emitted before the shared track search is shown for the first time. */
+    void trackSearchDialogCreated(QDialog *dialog);
 
 private slots:
     void removeAction(QObject *action);

@@ -1,4 +1,7 @@
 #include "classicwindow.h"
+#include "classicskin.h"
+#include "classicequalizer.h"
+#include "consolecontrols.h"
 #include "windowmagnet.h"
 #include "spectrum.h"
 #include <qmmp/soundcore.h>
@@ -6,6 +9,7 @@
 #include <qmmpui/mediaplayer.h>
 #include <qmmpui/playlistmanager.h>
 #include <qmmpui/playlisttrack.h>
+#include <qmmpui/qmmpuisettings.h>
 #include <qmmpui/uihelper.h>
 #include <QAbstractListModel>
 #include <QCloseEvent>
@@ -13,8 +17,14 @@
 #include <QDragEnterEvent>
 #include <QFileInfo>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListView>
-#include <QMenuBar>
+#include <QMenu>
+#include <QListWidget>
+#include <QPainter>
+#include <QSplitter>
+#include <QSizeGrip>
+#include <QStyledItemDelegate>
 #include <QMimeData>
 #include <QSettings>
 #include <QSlider>
@@ -42,6 +52,11 @@ public:
         const auto *track = m_playlist->track(index.row());
         if(!track)
             return {};
+        if(role == Qt::UserRole+1)
+            return m_playlist == PlayListManager::instance()->currentPlayList() &&
+                   index.row() == m_playlist->currentIndex();
+        if(role == Qt::UserRole)
+            return track->duration();
         if(role == Qt::ToolTipRole)
             return track->path();
         if(role != Qt::DisplayRole)
@@ -51,7 +66,7 @@ public:
     void refreshMetadata()
     {
         if(m_count)
-            emit dataChanged(index(0, 0), index(m_count - 1, 0), {Qt::DisplayRole});
+            emit dataChanged(index(0, 0), index(m_count - 1, 0), {Qt::DisplayRole, Qt::UserRole});
     }
 private:
     PlayListModel *m_playlist = nullptr;
@@ -72,187 +87,409 @@ static QString timeLabel(qint64 ms)
     return QStringLiteral("%1:%2").arg(seconds / 60).arg(seconds % 60, 2, 10, QLatin1Char('0'));
 }
 
+static void decorateDialog(QDialog *dialog, const QString &title)
+{
+    dialog->setProperty("classicDialog", true);
+    dialog->setAttribute(Qt::WA_WindowPropagation);
+    dialog->setWindowFlag(Qt::FramelessWindowHint);
+    dialog->setWindowTitle(title);
+    dialog->layout()->setContentsMargins(12, 9, 12, 8);
+    dialog->layout()->setSpacing(8);
+    dialog->layout()->setMenuBar(new ConsoleTitle(title, dialog));
+    dialog->setSizeGripEnabled(true);
+}
+
+// Keep the duration column visible even when a title is longer than the viewport.
+class TrackDelegate final : public QStyledItemDelegate
+{
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+    void paint(QPainter *p, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    {
+        QStyleOptionViewItem opt(option);
+        initStyleOption(&opt,index);
+        const QString title = QStringLiteral("%1. %2").arg(index.row()+1).arg(opt.text);
+        opt.text.clear();
+        const QWidget *widget = opt.widget;
+        widget->style()->drawControl(QStyle::CE_ItemViewItem,&opt,p,widget);
+        p->save();
+        p->setPen(opt.palette.color(opt.state.testFlag(QStyle::State_Selected) ?
+                                    QPalette::HighlightedText : QPalette::Text));
+        const QRect area = opt.rect.adjusted(4,0,-5,0);
+        const qint64 duration = index.data(Qt::UserRole).toLongLong();
+        const QString length = duration > 0 ? timeLabel(duration) : QStringLiteral("—");
+        const int right = qMax(opt.fontMetrics.horizontalAdvance("00:00"), opt.fontMetrics.horizontalAdvance(length));
+        p->drawText(area, Qt::AlignVCenter | Qt::AlignRight, length);
+        if(index.data(Qt::UserRole+1).toBool())
+        {
+            const QPoint at = area.topLeft() + QPoint(0,area.height()/2);
+            p->save();
+            p->setBrush(p->pen().color());
+            p->setPen(Qt::NoPen);
+            p->drawPolygon(QPolygon{at+QPoint(0,-3),at+QPoint(4,0),at+QPoint(0,3)});
+            p->restore();
+        }
+        const QRect left = area.adjusted(7,0,-right-9,0);
+        p->drawText(left, Qt::AlignVCenter | Qt::AlignLeft, opt.fontMetrics.elidedText(title,Qt::ElideRight,left.width()));
+        p->restore();
+    }
+    QSize sizeHint(const QStyleOptionViewItem &opt, const QModelIndex &) const override
+    {
+        return {80, qMax(19, opt.fontMetrics.height()+2)};
+    }
+};
+
 ClassicWindow::ClassicWindow()
+{
+    setWindowTitle(QStringLiteral("Qmmp · 经典播放器"));
+    setWindowFlag(Qt::FramelessWindowHint);
+    setAcceptDrops(true);
+    setObjectName("ClassicWindow");
+    createMenus();
+    auto panel = [this](const QString &id,const QString &title,QWidget *content) {
+        auto *dock = new QDockWidget(title,this);
+        dock->setObjectName(id);
+        dock->setTitleBarWidget(new ConsoleTitle(title,dock));
+        dock->setWidget(content);
+        return dock;
+    };
+    m_eqDock = createClassicEqualizer(this);
+    m_playlistDock = panel("playlist",tr("播放列表"),createPlaylist());
+    m_lyricsDock = panel("lyrics",tr("歌词秀"),createLyrics());
+    m_playlistDock->setAcceptDrops(true);
+    m_playlistDock->installEventFilter(this);
+    const QList<QDockWidget *> panels {m_eqDock, m_playlistDock, m_lyricsDock};
+    for(auto *dock : panels)
+    {
+        addDockWidget(Qt::BottomDockWidgetArea,dock);
+        m_view->addAction(dock->toggleViewAction());
+    }
+    m_eqDock->setProperty("stackHeight",126);
+    m_playlistDock->setProperty("stackHeight",238);
+    m_lyricsDock->setProperty("stackHeight",160);
+    setCentralWidget(createDeck());
+    auto *core = SoundCore::instance();
+    auto *manager = PlayListManager::instance();
+    bindPlaylist(manager->selectedPlayList());
+    connect(manager,&PlayListManager::selectedPlayListChanged,this,&ClassicWindow::bindPlaylist);
+    connect(core,&SoundCore::trackInfoChanged,this,&ClassicWindow::updateTrack);
+    connect(core,&SoundCore::elapsedChanged,this,&ClassicWindow::updatePosition);
+    connect(core,&SoundCore::stateChanged,this,&ClassicWindow::updateState);
+    auto *helper = UiHelper::instance();
+    connect(helper,&UiHelper::toggleVisibilityCalled,this,[this] { setVisible(!isVisible()); });
+    connect(helper,&UiHelper::showMainWindowCalled,this,[this] { show(); raise(); activateWindow(); });
+
+    QSettings settings;
+    const bool saved = settings.contains("Classic/consoleDocks");
+    for(auto *dock : panels)
+        dock->setFloating(true);
+    resize(396,238);
+    if(saved)
+    {
+        restoreGeometry(settings.value("Classic/consoleGeometry").toByteArray());
+        restoreState(settings.value("Classic/consoleDocks").toByteArray());
+    }
+    else if(settings.contains("Classic/geometry"))
+    {
+        restoreGeometry(settings.value("Classic/geometry").toByteArray());
+        resize(396,238);
+    }
+    updateState();
+    show();
+    m_magnet = std::make_unique<WindowMagnet>(this, panels);
+    m_view->addAction(tr("磁吸排列"), m_magnet.get(), &WindowMagnet::arrange);
+    if(!saved)
+        m_magnet->arrange();
+}
+
+ClassicWindow::~ClassicWindow() = default;
+
+void ClassicWindow::createMenus()
+{
+    auto *helper = UiHelper::instance();
+    m_menu = new QMenu(this);
+    auto *open = m_menu->addAction(tr("打开并播放…"),this,[=]{ helper->playFiles(this); });
+    open->setShortcut(QKeySequence::Open);
+    addAction(open);
+    m_menu->addAction(tr("添加文件夹…"),this,[=]{ helper->addDirectory(this); });
+    connect(helper, &UiHelper::trackSearchDialogCreated, this, [this](QDialog *dialog) {
+        if(dialog->parentWidget() != this)
+            return;
+        decorateDialog(dialog, tr("音乐窗"));
+        if(auto *search = dialog->findChild<QLineEdit *>("filterLineEdit"))
+            search->setPlaceholderText(tr("搜索当前播放列表"));
+    });
+    m_menu->addAction(tr("设置…"), this, [this] {
+        ConfigDialog dialog(this);
+        decorateDialog(&dialog, tr("设置"));
+        if(auto *navigation = dialog.findChild<QListWidget *>("contentsWidget"))
+            navigation->setIconSize(QSize(23, 23));
+        dialog.exec();
+    });
+    m_view = m_menu->addMenu(tr("视图"));
+    installClassicSkins(this, m_menu->addMenu(tr("皮肤")));
+    auto *tools = m_menu->addMenu(tr("工具"));
+    helper->registerMenu(UiHelper::TOOLS_MENU,tools,true);
+    m_menu->addSeparator();
+    auto *quit = m_menu->addAction(tr("退出"),helper,&UiHelper::exit);
+    quit->setShortcut(QKeySequence::Quit);
+    addAction(quit);
+    auto *play = new QAction(this);
+    play->setShortcut(Qt::Key_Space);
+    addAction(play);
+    connect(play,&QAction::triggered,this,&ClassicWindow::togglePlayback);
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(this,&QWidget::customContextMenuRequested,this,[this](QPoint p){ m_menu->popup(mapToGlobal(p)); });
+}
+
+void ClassicWindow::togglePlayback()
 {
     auto *core = SoundCore::instance();
     auto *player = MediaPlayer::instance();
-    auto *manager = PlayListManager::instance();
-    auto *helper = UiHelper::instance();
-    setWindowTitle(QStringLiteral("Qmmp · 经典播放器"));
-    setAcceptDrops(true);
-    setObjectName("ClassicWindow");
-    setStyleSheet(QStringLiteral(
-        "QMainWindow#ClassicWindow{background:#e8efee;color:#233d40;}"
-        "QWidget#deck{background:#203a3d;color:#f2f6eb;}"
-        "QLabel#song{font-size:22px;font-weight:600;color:#fff8df;}"
-        "QWidget#deck QLabel{color:#d8e6da;}"
-        "QLabel#clock{color:#d9e7cc;font-family:monospace;}"
-        "QWidget#deck QSlider::groove:horizontal{height:4px;border-radius:2px;background:#647e79;}"
-        "QWidget#deck QSlider::sub-page:horizontal{background:#ecc688;border-radius:2px;}"
-        "QWidget#deck QSlider::handle:horizontal{background:#fbf2d0;border:1px solid #abc0ad;"
-        "width:10px;margin:-4px 0;border-radius:3px;}"
-        "QToolButton{background:#e6efec;color:#193a38;border:1px solid #a8bbb5;"
-        "border-radius:5px;padding:5px;} QToolButton:hover{background:#fff8dc;}"
-        "QToolButton#play{background:#f3c57d;padding:6px 13px;}"
-        "QDockWidget::title{background:#d3e2de;color:#29423e;padding:4px;}"
-        "QListView{background:#f6f8f4;color:#203d38;border:0;outline:0;}"
-        "QListView::item{padding:4px 8px;} QListView::item:selected{background:#c6dfd5;color:#163f33;}"
-        "QWidget#lyricPanel{background:#f2f5ed;} QLabel#activeLyric{font-size:18px;"
-        "font-weight:600;color:#176653;} QLabel#nearLyric{color:#566d63;}"));
-    auto *deck = new QWidget;
-    deck->setObjectName("deck");
-    auto *panel = new QVBoxLayout(deck);
-    panel->setContentsMargins(14, 10, 14, 12);
-    m_title = new QLabel;
-    m_title->setObjectName("song");
-    m_title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    m_artist = new QLabel;
-    m_artist->setObjectName("artist");
-    auto *info = new QVBoxLayout;
-    info->addWidget(m_title);
-    info->addWidget(m_artist);
-    auto *header = new QHBoxLayout;
-    header->addLayout(info, 1);
-    header->addWidget(new ClassicSpectrum(deck), 0, Qt::AlignTop);
-    panel->addLayout(header);
-    auto *timeline = new QHBoxLayout;
-    m_position = new QSlider(Qt::Horizontal);
-    m_position->setAccessibleName(QStringLiteral("播放进度"));
-    m_position->setRange(0, 10000);
-    m_clock = new QLabel;
-    m_clock->setObjectName("clock");
-    timeline->addWidget(m_position, 1);
-    timeline->addWidget(m_clock);
-    panel->addLayout(timeline);
-    auto *controls = new QHBoxLayout;
-    auto button = [&](QStyle::StandardPixmap icon, const QString &label) {
-        auto *b = new QToolButton;
-        b->setIcon(style()->standardIcon(icon));
-        b->setToolTip(label);
-        b->setAccessibleName(label);
-        controls->addWidget(b);
-        return b;
-    };
-    connect(button(QStyle::SP_MediaSkipBackward, tr("上一首")), &QToolButton::clicked, player, &MediaPlayer::previous);
-    m_play = button(QStyle::SP_MediaPlay, tr("播放"));
-    m_play->setObjectName("play");
-    auto toggle = [=]() {
-        if(core->state() == Qmmp::Playing || core->state() == Qmmp::Paused)
-            player->pause();
-        else if(manager->currentPlayList()->isEmpty())
-            helper->playFiles(this);
-        else
-            player->play();
-    };
-    connect(m_play, &QToolButton::clicked, this, toggle);
-    connect(button(QStyle::SP_MediaSkipForward, tr("下一首")), &QToolButton::clicked, player, &MediaPlayer::next);
-    connect(button(QStyle::SP_MediaStop, tr("停止")), &QToolButton::clicked, player, &MediaPlayer::stop);
-    controls->addStretch();
-    controls->addWidget(new QLabel(tr("音量")));
-    auto *volume = new QSlider(Qt::Horizontal);
-    volume->setAccessibleName(tr("音量"));
-    volume->setRange(0, 100);
-    volume->setMaximumWidth(96);
-    volume->setValue(core->volume());
-    controls->addWidget(volume);
-    connect(volume, &QSlider::valueChanged, core, &SoundCore::setVolume);
-    connect(core, &SoundCore::volumeChanged, volume, &QSlider::setValue);
-    panel->addLayout(controls);
-    setCentralWidget(deck);
-
-    auto *fileMenu = menuBar()->addMenu(tr("文件"));
-    fileMenu->addAction(tr("打开并播放…"), this, [=] { helper->playFiles(this); })->setShortcut(QKeySequence::Open);
-    fileMenu->addAction(tr("添加文件…"), this, [=] { helper->addFiles(this); });
-    fileMenu->addAction(tr("添加文件夹…"), this, [=] { helper->addDirectory(this); });
-    fileMenu->addAction(tr("设置…"), this, [this] { ConfigDialog dialog(this); dialog.exec(); });
-    fileMenu->addAction(tr("退出"), helper, &UiHelper::exit)->setShortcut(QKeySequence::Quit);
-    auto *playlists = menuBar()->addMenu(tr("列表"));
-    connect(playlists, &QMenu::aboutToShow, this, [=] {
-        playlists->clear();
-        for(auto *playlist : manager->playLists())
-        {
-            auto *action = playlists->addAction(playlist->name(), this, [=] { manager->selectPlayList(playlist); });
-            action->setCheckable(true);
-            action->setChecked(playlist == manager->selectedPlayList());
-        }
-    });
-    auto *view = menuBar()->addMenu(tr("视图"));
-    auto *tools = menuBar()->addMenu(tr("工具"));
-    helper->registerMenu(UiHelper::TOOLS_MENU, tools, true);
-    auto *playAction = new QAction(this);
-    playAction->setShortcut(Qt::Key_Space);
-    addAction(playAction);
-    connect(playAction, &QAction::triggered, this, toggle);
-
-    auto addDock = [&](const QString &name, const QString &title, QWidget *content) {
-        auto *dock = new QDockWidget(title, this);
-        dock->setObjectName(name);
-        dock->setWidget(content);
-        addDockWidget(Qt::BottomDockWidgetArea, dock);
-        view->addAction(dock->toggleViewAction());
-        return dock;
-    };
-    m_list = new QListView;
-    m_list->setUniformItemSizes(true);
-    m_tracks = new TrackList(m_list);
-    m_list->setModel(m_tracks);
-    auto *listDock = addDock(QStringLiteral("playlist"), tr("播放列表"), m_list);
-    listDock->setAcceptDrops(true);
-    listDock->installEventFilter(this);
-    auto *lyrics = new QWidget;
-    lyrics->setObjectName("lyricPanel");
-    auto *lines = new QVBoxLayout(lyrics);
-    lines->addStretch();
-    auto lyricLabel = [&](const QString &name) {
-        auto *label = new QLabel;
-        label->setObjectName(name);
-        label->setAlignment(Qt::AlignCenter);
-        label->setTextFormat(Qt::PlainText);
-        label->setWordWrap(true);
-        lines->addWidget(label);
-        return label;
-    };
-    m_previousLine = lyricLabel(QStringLiteral("nearLyric"));
-    m_currentLine = lyricLabel(QStringLiteral("activeLyric"));
-    m_nextLine = lyricLabel(QStringLiteral("nearLyric"));
-    lines->addStretch();
-    auto *lyricsDock = addDock(QStringLiteral("lyrics"), tr("同步歌词"), lyrics);
-    splitDockWidget(listDock, lyricsDock, Qt::Horizontal);
-    m_title->setTextFormat(Qt::PlainText);
-    m_artist->setTextFormat(Qt::PlainText);
-    connect(m_list, &QListView::activated, this, [=](const QModelIndex &index) {
-        if(!m_playlist || !m_playlist->setCurrent(index.row()))
-            return;
-        player->stop();
-        manager->activatePlayList(m_playlist);
+    if(core->state() == Qmmp::Playing || core->state() == Qmmp::Paused)
+        player->pause();
+    else if(PlayListManager::instance()->currentPlayList()->isEmpty())
+        UiHelper::instance()->playFiles(this);
+    else
         player->play();
-    });
-    bindPlaylist(manager->selectedPlayList());
-    connect(manager, &PlayListManager::selectedPlayListChanged, this, &ClassicWindow::bindPlaylist);
-    connect(core, &SoundCore::trackInfoChanged, this, &ClassicWindow::updateTrack);
-    connect(core, &SoundCore::elapsedChanged, this, &ClassicWindow::updatePosition);
-    connect(core, &SoundCore::stateChanged, this, &ClassicWindow::updateState);
+}
+
+QWidget *ClassicWindow::createDeck()
+{
+    auto *core = SoundCore::instance();
+    auto *player = MediaPlayer::instance();
+    auto *deck = new QWidget(this);
+    deck->setObjectName("deck");
+    auto *outer = new QVBoxLayout(deck);
+    outer->setContentsMargins(2,1,2,2);
+    outer->setSpacing(1);
+    outer->addWidget(new ConsoleTitle(tr("Qmmp 静听"),this,m_menu));
+    auto *inner = new QVBoxLayout;
+    inner->setContentsMargins(6,0,6,0);
+    inner->setSpacing(2);
+    outer->addLayout(inner,1);
+    auto *strip = new QWidget(deck);
+    strip->setMinimumHeight(27);
+    strip->setObjectName("readout");
+    auto *readout = new QHBoxLayout(strip);
+    readout->setContentsMargins(7,2,6,2);
+    m_title = new QLabel(strip);
+    m_title->setObjectName("song");
+    m_title->setTextFormat(Qt::PlainText);
+    m_title->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);
+    m_clock = new QLabel(strip);
+    m_clock->setObjectName("clock");
+    readout->addWidget(m_title,1);
+    readout->addWidget(m_clock);
+    inner->addWidget(strip);
+    auto *display = new SpectrumDisplay(deck);
+    display->setObjectName("display");
+    auto *screen = new QHBoxLayout(display);
+    screen->setContentsMargins(5,4,5,4);
+    screen->addWidget(new ClassicSpectrum(display),3);
+    auto *right = new QVBoxLayout;
+    screen->addLayout(right,2);
+    m_status = new QLabel(display);
+    m_status->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    right->addWidget(m_status);
+    auto *audio = new QHBoxLayout;
+    auto *mute = new ConsoleKey(ConsoleKey::Speaker,tr("静音"),display);
+    mute->setFixedSize(22,18);
+    mute->setCheckable(true);
+    mute->setChecked(core->isMuted());
+    connect(mute,&QToolButton::clicked,core,&SoundCore::setMuted);
+    connect(core,&SoundCore::mutedChanged,mute,&QToolButton::setChecked);
+    audio->addWidget(mute);
+    auto *volume = new QSlider(Qt::Horizontal,display);
+    volume->setAccessibleName(tr("音量"));
+    volume->setRange(0,100);
+    volume->setValue(core->volume());
+    connect(volume,&QSlider::valueChanged,core,&SoundCore::setVolume);
+    connect(core,&SoundCore::volumeChanged,volume,&QSlider::setValue);
+    audio->addWidget(volume);
+    right->addLayout(audio);
+    auto *switches = new QHBoxLayout;
+    for(auto *dock : {m_playlistDock,m_eqDock,m_lyricsDock})
+    {
+        auto *key = new QToolButton(display);
+        key->setCheckable(true);
+        key->setChecked(dock->isVisible());
+        connect(key,&QToolButton::clicked,dock,&QDockWidget::setVisible);
+        connect(dock,&QDockWidget::visibilityChanged,key,&QToolButton::setChecked);
+        key->setText(dock == m_playlistDock ? "PL" : dock == m_eqDock ? "EQ" : "LRC");
+        key->setToolTip(dock->windowTitle());
+        key->setAccessibleName(dock->windowTitle());
+        key->setObjectName("consoleKey");
+        switches->addWidget(key);
+    }
+    right->addLayout(switches);
+    inner->addWidget(display,1);
+    m_position = new QSlider(Qt::Horizontal,deck);
+    m_position->setAccessibleName(tr("播放进度"));
+    m_position->setRange(0,10000);
     m_position->setTracking(false);
-    connect(m_position, &QSlider::valueChanged, this, [=](int value) {
-        const qint64 time = core->duration() * value / m_position->maximum();
+    connect(m_position,&QSlider::valueChanged,this,[=](int value) {
+        const qint64 time = core->duration()*value/m_position->maximum();
         core->seek(time);
         updateLyrics(time);
     });
-    connect(helper, &UiHelper::toggleVisibilityCalled, this, [this] { setVisible(!isVisible()); });
-    connect(helper, &UiHelper::showMainWindowCalled, this, [this] { showNormal(); raise(); activateWindow(); });
-    resize(540, 370);
-    QSettings settings;
-    restoreGeometry(settings.value("Classic/geometry").toByteArray());
-    if(!restoreState(settings.value("Classic/docks").toByteArray()))
-        resizeDocks({listDock, lyricsDock}, {260, 260}, Qt::Horizontal);
-    updateState();
-    show();
-    auto *magnet = new WindowMagnet(this, listDock, lyricsDock);
-    view->addAction(tr("磁吸排列"), magnet, &WindowMagnet::arrange);
-    if(!settings.contains("Classic/magneticLayout") && !listDock->isFloating() &&
-       !lyricsDock->isFloating() && listDock->isVisible() && lyricsDock->isVisible())
-        magnet->arrange();
+    inner->addWidget(m_position);
+    auto *transport = new QWidget(deck);
+    transport->setObjectName("transport");
+    auto *keys = new QHBoxLayout(transport);
+    keys->setContentsMargins(11,2,4,4);
+    keys->setSpacing(3);
+    auto key = [&](ConsoleKey::Glyph glyph,const QString &name) {
+        auto *b = new ConsoleKey(glyph,name,transport);
+        const int size = glyph == ConsoleKey::Play ? 60 : 40;
+        b->setObjectName(glyph == ConsoleKey::Play ? "play" : "round");
+        b->setFixedSize(size,size);
+        if(keys->count()) keys->addStretch(1);
+        keys->addWidget(b);
+        return b;
+    };
+    connect(key(ConsoleKey::Stop,tr("停止")),&QToolButton::clicked,player,&MediaPlayer::stop);
+    connect(key(ConsoleKey::Previous,tr("上一首")),&QToolButton::clicked,player,&MediaPlayer::previous);
+    m_play = key(ConsoleKey::Play,tr("播放"));
+    connect(m_play,&QToolButton::clicked,this,&ClassicWindow::togglePlayback);
+    connect(key(ConsoleKey::Next,tr("下一首")),&QToolButton::clicked,player,&MediaPlayer::next);
+    connect(key(ConsoleKey::Eject,tr("打开文件")),&QToolButton::clicked,this,[this]{ UiHelper::instance()->playFiles(this); });
+    keys->addStretch(2);
+    auto *library = new QToolButton(transport);
+    library->setObjectName("libraryKey");
+    library->setText(tr("♫ 音乐窗"));
+    library->setToolTip(tr("搜索播放列表中的音乐"));
+    library->setFixedSize(76,24);
+    connect(library,&QToolButton::clicked,this,[this]{ UiHelper::instance()->jumpToTrack(this); });
+    keys->addWidget(library);
+    auto *grip = new QSizeGrip(transport);
+    grip->setFixedSize(10,10);
+    keys->addWidget(grip,0,Qt::AlignBottom);
+    outer->addWidget(transport);
+    return deck;
+}
 
+QWidget *ClassicWindow::createPlaylist()
+{
+    auto *helper = UiHelper::instance();
+    auto *manager = PlayListManager::instance();
+    auto *body = new QWidget(this);
+    body->setObjectName("panelBody");
+    auto *layout = new QVBoxLayout(body);
+    layout->setContentsMargins(5,1,5,5);
+    layout->setSpacing(2);
+    auto *tools = new QWidget(body);
+    tools->setObjectName("listTools");
+    auto *row = new QHBoxLayout(tools);
+    row->setContentsMargins(2,0,2,0);
+    row->setSpacing(0);
+    auto tool = [&](const QString &symbol,const QString &label,auto callback, QToolButton *b = nullptr) {
+        if(!b)
+            b = new QToolButton(tools);
+        b->setText(symbol);
+        b->setToolTip(label);
+        b->setAccessibleName(label);
+        b->setFixedHeight(24);
+        b->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
+        row->addWidget(b);
+        connect(b,&QToolButton::clicked,this,callback);
+        return b;
+    };
+    tool("+",tr("添加歌曲"),[=]{ helper->addFiles(this); });
+    tool("−",tr("移除所选曲目"),[this] {
+        if(m_list->currentIndex().isValid())
+            m_playlist->removeTrack(m_list->currentIndex().row());
+    });
+    auto *sort = tool("≡", tr("排序"), []{});
+    auto *sortMenu = new QMenu(sort);
+    sortMenu->addAction(tr("按曲名排序"), this, [this]{ m_playlist->sort(PlayListModel::TITLE); });
+    sortMenu->addAction(tr("反转列表顺序"), this, [this]{ m_playlist->reverseList(); });
+    sort->setMenu(sortMenu);
+    sort->setPopupMode(QToolButton::InstantPopup);
+    auto *settings = QmmpUiSettings::instance();
+    auto *order = new ConsoleKey(ConsoleKey::Sequential, tr("播放顺序"), tools);
+    order->setObjectName("playOrder");
+    order->setCheckable(true);
+    tool({}, tr("播放顺序"), [settings](bool checked){ settings->setShuffle(checked); }, order);
+    auto syncOrder = [order](bool shuffle) {
+        order->setChecked(shuffle);
+        order->setGlyph(shuffle ? ConsoleKey::Shuffle : ConsoleKey::Sequential);
+        order->setAccessibleName(shuffle ? tr("随机播放") : tr("顺序播放"));
+        order->setToolTip(shuffle ? tr("随机播放 · 点击切换为顺序播放") : tr("顺序播放 · 点击切换为随机播放"));
+    };
+    connect(settings, &QmmpUiSettings::shuffleChanged, order, syncOrder);
+    syncOrder(settings->isShuffle());
+    tool("⌕",tr("查找歌曲"),[=]{ helper->jumpToTrack(this); });
+    tool("▤",tr("保存播放列表"),[=]{ helper->savePlayList(this); });
+    auto *manage = new QMenu(body);
+    manage->addAction(tr("新建列表"),this,[=]{ manager->createPlayList(); });
+    manage->addAction(tr("载入播放列表…"),this,[=]{ helper->loadPlayList(this); });
+    auto *menuKey = tool("M",tr("管理列表"),[]{});
+    menuKey->setMenu(manage);
+    menuKey->setPopupMode(QToolButton::InstantPopup);
+    layout->addWidget(tools);
+    auto *split = new QSplitter(Qt::Horizontal,body);
+    split->setHandleWidth(4);
+    split->setChildrenCollapsible(false);
+    m_collections = new QListWidget(split);
+    m_collections->setObjectName("collections");
+    m_collections->setAccessibleName(tr("列表分组"));
+    m_collections->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_list = new QListView(split);
+    m_list->setObjectName("tracks");
+    m_list->setAccessibleName(tr("曲目"));
+    m_list->setUniformItemSizes(true);
+    m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_tracks = new TrackList(m_list);
+    m_list->setModel(m_tracks);
+    m_list->setItemDelegate(new TrackDelegate(m_list));
+    split->setStretchFactor(1,1);
+    split->setSizes({78,300});
+    layout->addWidget(split);
+    auto sync = [=] {
+        QSignalBlocker block(m_collections);
+        m_collections->clear();
+        for(const QString &name : manager->playListNames())
+            m_collections->addItem("[" + name + "]");
+        m_collections->setCurrentRow(manager->selectedPlayListIndex());
+    };
+    sync();
+    connect(manager,&PlayListManager::playListsChanged,this,sync);
+    connect(manager,&PlayListManager::selectedPlayListChanged,this,[=] {
+        QSignalBlocker block(m_collections);
+        m_collections->setCurrentRow(manager->selectedPlayListIndex());
+    });
+    connect(m_collections,&QListWidget::currentRowChanged,manager,&PlayListManager::selectPlayListIndex);
+    connect(m_list,&QListView::activated,this,[=](const QModelIndex &index) {
+        if(!m_playlist || !m_playlist->setCurrent(index.row()))
+            return;
+        MediaPlayer::instance()->stop();
+        manager->activatePlayList(m_playlist);
+        MediaPlayer::instance()->play();
+    });
+    return body;
+}
+
+QWidget *ClassicWindow::createLyrics()
+{
+    auto *lyrics = new QWidget(this);
+    lyrics->setObjectName("lyricPanel");
+    auto *lines = new QVBoxLayout(lyrics);
+    lines->setContentsMargins(5,2,5,2);
+    lines->setSpacing(0);
+    lines->addStretch();
+    for(size_t i = 0; i < m_lines.size(); ++i)
+    {
+        auto *label = new QLabel(lyrics);
+        label->setObjectName(i == m_lines.size()/2 ? "activeLyric" : "nearLyric");
+        label->setAlignment(Qt::AlignCenter);
+        label->setTextFormat(Qt::PlainText);
+        label->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);
+        m_lines[i] = label;
+        lines->addWidget(label);
+    }
+    lines->addStretch();
+    return lyrics;
 }
 
 void ClassicWindow::bindPlaylist(PlayListModel *playlist)
@@ -284,7 +521,7 @@ void ClassicWindow::updateState()
 {
     auto *core = SoundCore::instance();
     const bool playing = core->state() == Qmmp::Playing;
-    m_play->setIcon(style()->standardIcon(playing ? QStyle::SP_MediaPause : QStyle::SP_MediaPlay));
+    m_play->setGlyph(playing ? ConsoleKey::Pause : ConsoleKey::Play);
     m_play->setToolTip(playing ? tr("暂停") : tr("播放"));
     m_play->setAccessibleName(m_play->toolTip());
     if(playing || core->state() == Qmmp::Paused)
@@ -295,11 +532,11 @@ void ClassicWindow::updateState()
         m_lyrics = {};
         m_line = -2;
         m_title->setText(tr("尚未播放"));
-        m_artist->setText(tr("打开音乐或拖入文件"));
+        m_status->setText(tr("状态: 停止"));
         if(core->state() == Qmmp::NormalError)
-            m_artist->setText(tr("无法读取这首歌曲"));
+            m_status->setText(tr("无法读取歌曲"));
         if(core->state() == Qmmp::FatalError)
-            m_artist->setText(tr("音频输出不可用，请检查输出设备"));
+            m_status->setText(tr("音频输出不可用"));
         updatePosition(0);
     }
 }
@@ -310,25 +547,14 @@ void ClassicWindow::updateTrack()
     const auto &info = core->trackInfo();
     const QString path = info.path().isEmpty() ? core->path() : info.path();
     const QString title = info.value(Qmmp::TITLE);
-    m_title->setText(title.isEmpty() ? QFileInfo(path).completeBaseName() : title);
-    m_title->setToolTip(m_title->text());
-    QStringList details;
     const QString artist = info.value(Qmmp::ARTIST);
-    if(!artist.isEmpty())
-        details << artist;
-    const QString album = info.value(Qmmp::ALBUM);
-    if(!album.isEmpty())
-        details << album;
-    if(details.isEmpty())
-    {
-        const QString type = QFileInfo(path).suffix().toUpper();
-        if(!type.isEmpty())
-            details << type;
-        const int rate = info.value(Qmmp::SAMPLERATE).toInt();
-        if(rate > 0)
-            details << QStringLiteral("%1 kHz").arg(rate / 1000.0);
-    }
-    m_artist->setText(details.join(QStringLiteral("  ·  ")));
+    const QString song = title.isEmpty() ? QFileInfo(path).completeBaseName() : title;
+    m_title->setText(artist.isEmpty() ? song : artist + QStringLiteral(" - ") + song);
+    m_title->setToolTip(m_title->text());
+    const int channels = core->audioParameters().channels();
+    const QString mode = channels == 2 ? tr("立体声") : channels == 1 ? tr("单声道") : QString();
+    m_status->setText((core->state() == Qmmp::Paused ? tr("状态: 暂停") : tr("状态: 播放"))
+                      + QStringLiteral("  ") + mode);
     if(path != m_path)
     {
         m_path = path;
@@ -347,7 +573,8 @@ void ClassicWindow::updatePosition(qint64 time)
         QSignalBlocker block(m_position);
         m_position->setValue(duration > 0 ? time * m_position->maximum() / duration : 0);
     }
-    m_clock->setText(timeLabel(time) + QStringLiteral(" / ") + timeLabel(duration));
+    m_clock->setText(timeLabel(time).rightJustified(5, QLatin1Char('0')));
+    m_clock->setToolTip(timeLabel(time) + " / " + timeLabel(duration));
     updateLyrics(time);
 }
 
@@ -357,17 +584,17 @@ void ClassicWindow::updateLyrics(qint64 time)
     if(m_line == line)
         return;
     m_line = line;
-    m_previousLine->setText(m_lyrics.textAt(line - 1));
-    m_currentLine->setText(m_lyrics.isEmpty() ? tr("暂无同步歌词") : m_lyrics.textAt(line));
-    m_nextLine->setText(m_lyrics.textAt(line + 1));
+    const int middle = int(m_lines.size()/2);
+    for(int i = 0; i < int(m_lines.size()); ++i)
+        m_lines[i]->setText(m_lyrics.isEmpty() && i == middle ? tr("暂无同步歌词") :
+                            m_lyrics.textAt(line+i-middle));
 }
 
 void ClassicWindow::closeEvent(QCloseEvent *event)
 {
     QSettings settings;
-    settings.setValue("Classic/magneticLayout", true);
-    settings.setValue("Classic/geometry", saveGeometry());
-    settings.setValue("Classic/docks", saveState());
+    settings.setValue("Classic/consoleGeometry", saveGeometry());
+    settings.setValue("Classic/consoleDocks", saveState());
     QMainWindow::closeEvent(event);
     UiHelper::instance()->exit();
 }
@@ -375,7 +602,7 @@ void ClassicWindow::closeEvent(QCloseEvent *event)
 bool ClassicWindow::eventFilter(QObject *watched, QEvent *event)
 {
     if((event->type() == QEvent::DragEnter || event->type() == QEvent::Drop) &&
-       watched == m_list->parentWidget())
+       watched == m_playlistDock)
     {
         auto *drop = static_cast<QDropEvent *>(event);
         if(m_playlist && drop->mimeData()->hasUrls())

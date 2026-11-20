@@ -32,9 +32,12 @@ bool join(const QRect &a, const QRect &b, int distance, QPoint &shift)
 }
 }
 
-WindowMagnet::WindowMagnet(QMainWindow *main, QDockWidget *list, QDockWidget *lyrics)
-    : QObject(main), windows{main, list, lyrics}
+WindowMagnet::WindowMagnet(QMainWindow *main, const QList<QDockWidget *> &panels)
+    : QObject(main), windows{main}
 {
+    for(auto *panel : panels)
+        windows << panel;
+    frames.resize(windows.size());
     for(auto *w : windows)
         w->installEventFilter(this);
     remember();
@@ -42,7 +45,7 @@ WindowMagnet::WindowMagnet(QMainWindow *main, QDockWidget *list, QDockWidget *ly
 
 void WindowMagnet::remember()
 {
-    for(int i = 0; i < 3; ++i)
+    for(int i = 0; i < windows.size(); ++i)
         frames[i] = windows[i]->isVisible() && windows[i]->isWindow()
                   ? windows[i]->frameGeometry() : QRect();
 }
@@ -66,11 +69,11 @@ void WindowMagnet::arrange()
     adjusting = true;
     auto *main = windows[0];
     const int width = main->frameGeometry().width();
-    for(int i = 1; i < 3; ++i)
+    for(int i = 1; i < windows.size(); ++i)
     {
         auto *dock = static_cast<QDockWidget *>(windows[i]);
         dock->setFloating(true);
-        dock->resize(width, qBound(100, (main->screen()->availableGeometry().height() - main->frameGeometry().height()) / 2, 180));
+        dock->resize(width, dock->property("stackHeight").toInt());
         dock->show();
     }
     // Window managers publish frame margins after mapping the floating panels.
@@ -78,16 +81,21 @@ void WindowMagnet::arrange()
         auto *main = windows[0];
         const QRect area = main->screen()->availableGeometry();
         const int groupWidth = main->frameGeometry().width();
-        matchFrameWidth(windows[1], groupWidth);
-        matchFrameWidth(windows[2], groupWidth);
-        const int groupHeight = main->frameGeometry().height() +
-            windows[1]->frameGeometry().height() + windows[2]->frameGeometry().height();
+        int groupHeight = main->frameGeometry().height();
+        for(int i = 1; i < windows.size(); ++i)
+        {
+            matchFrameWidth(windows[i], groupWidth);
+            groupHeight += windows[i]->frameGeometry().height();
+        }
         int x = qBound(area.left(), main->x(), qMax(area.left(), area.right()+1-groupWidth));
         int y = qBound(area.top(), main->y(), qMax(area.top(), area.bottom()+1-groupHeight));
         main->move(x,y);
         y += main->frameGeometry().height();
-        windows[1]->move(x,y);
-        windows[2]->move(x, y + windows[1]->frameGeometry().height());
+        for(int i = 1; i < windows.size(); ++i)
+        {
+            windows[i]->move(x,y);
+            y += windows[i]->frameGeometry().height();
+        }
         remember();
         adjusting = false;
     });
@@ -95,9 +103,9 @@ void WindowMagnet::arrange()
 
 bool WindowMagnet::eventFilter(QObject *object, QEvent *event)
 {
-    if(!adjusting)
+    if(!adjusting && !windows[0]->isMaximized() && !windows[0]->isMinimized())
     {
-        for(int i = 0; i < 3; ++i)
+        for(int i = 0; i < windows.size(); ++i)
         {
             QWidget *w = windows[i];
             if(object != w)
@@ -111,10 +119,11 @@ bool WindowMagnet::eventFilter(QObject *object, QEvent *event)
             {
                 // Keep a vertical stack aligned when the player itself is resized.
                 adjusting = true;
-                bool placed[3] = {true, false, false};
-                for(int pass = 0; pass < 2; ++pass)
-                    for(int k = 1; k < 3; ++k)
-                        for(int j = 0; j < 3; ++j)
+                QList<bool> placed(windows.size(), false);
+                placed[0] = true;
+                for(int pass = 0; pass < windows.size()-1; ++pass)
+                    for(int k = 1; k < windows.size(); ++k)
+                        for(int j = 0; j < windows.size(); ++j)
                         {
                             if(placed[k] || !placed[j] || !frames[k].isValid() ||
                                frames[k].left() != frames[j].left())
@@ -143,14 +152,14 @@ bool WindowMagnet::eventFilter(QObject *object, QEvent *event)
 void WindowMagnet::follow(int source)
 {
     adjusting = true;
-    bool group[3] = {};
+    QList<bool> group(windows.size(), false);
     group[source] = true;
     QPoint shift;
     // Moving the player carries every panel attached to it, including a chain.
     if(source == 0)
-        for(int pass = 0; pass < 2; ++pass)
-            for(int i = 1; i < 3; ++i)
-                for(int j = 0; j < 3; ++j)
+        for(int pass = 0; pass < windows.size()-1; ++pass)
+            for(int i = 1; i < windows.size(); ++i)
+                for(int j = 0; j < windows.size(); ++j)
                     if(group[j] && !group[i] && frames[i].isValid() &&
                        join(frames[i], frames[j], 1, shift))
                         group[i] = true;
@@ -158,8 +167,8 @@ void WindowMagnet::follow(int source)
     QPoint snap;
     int best = std::numeric_limits<int>::max();
     int target = -1, member = -1;
-    for(int i = 0; i < 3; ++i)
-        for(int j = 0; j < 3; ++j)
+    for(int i = 0; i < windows.size(); ++i)
+        for(int j = 0; j < windows.size(); ++j)
             if(group[i] && !group[j] && windows[j]->isVisible() && windows[j]->isWindow() &&
                join(frames[i].translated(delta), windows[j]->frameGeometry(), reach, shift) &&
                shift.manhattanLength() < best)
@@ -169,7 +178,7 @@ void WindowMagnet::follow(int source)
                 best = shift.manhattanLength();
                 snap = shift;
             }
-    for(int i = 0; i < 3; ++i)
+    for(int i = 0; i < windows.size(); ++i)
         if(group[i] && windows[i]->isVisible() && windows[i]->isWindow())
         {
             const QPoint pos = frames[i].topLeft() + delta + snap;

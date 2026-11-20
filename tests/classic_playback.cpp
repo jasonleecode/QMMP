@@ -1,21 +1,36 @@
 #include <QApplication>
+#include <QAction>
+#include <QMenu>
+#include <QPainter>
+#include <QSlider>
+#include <QToolButton>
 #include <QDir>
+#include <QDataStream>
+#include <QMouseEvent>
 #include <QDockWidget>
 #include <QDragEnterEvent>
 #include <QMimeData>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QLabel>
+#include <QLineEdit>
+#include <QLayout>
+#include <QLibraryInfo>
 #include <QListView>
+#include <QListWidget>
 #include <QMainWindow>
 #include <QProcess>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QTimer>
+#include <QTranslator>
 #include <qmmp/decoderfactory.h>
+#include <qmmp/qmmptextcodec.h>
 #include <qmmp/soundcore.h>
 #include <qmmpui/mediaplayer.h>
 #include <qmmpui/uihelper.h>
+#include <qmmpui/qmmpuisettings.h>
 #include <qmmpui/uiloader.h>
 #include <qmmpui/uifactory.h>
 #include <memory>
@@ -52,15 +67,22 @@ int main(int argc, char **argv)
     app.setOrganizationName("qmmp");
     app.setApplicationName("test");
     QSettings().setValue("Output/current_plugin", "null");
+    Qmmp::setUiLanguageID(QStringLiteral("zh_CN"));
+    QTranslator qtChinese;
+    if(qtChinese.load(QLibraryInfo::path(QLibraryInfo::TranslationsPath) + "/qtbase_zh_CN"))
+        app.installTranslator(&qtChinese);
     CHECK(linkPlugin(argv[2], root + "/Ui"));
     CHECK(linkPlugin(argv[3], root + "/Input"));
     CHECK(linkPlugin(argv[4], Qmmp::configDir() + "/plugins-2.3/Input"));
     CHECK(linkPlugin(argv[5], root + "/Output"));
 
     QString music;
+    QStringList samples;
+    const QStringList titles = {"短音", "春天", "月光慢板", "雨中的街道", "夏日序曲"};
     for(const QString &ext : { "mp3", "wav", "flac", "ogg", "m4a" })
     {
-        const QString path = temp.filePath("春天." + ext);
+        const QString path = temp.filePath(titles.at(samples.size()) + "." + ext);
+        samples << path;
         const QString seconds = ext == "mp3" ? "0.15" : (ext == "wav" ? "9" : "1");
         CHECK(QProcess::execute(argv[1], { "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440",
                 "-ac", "2", "-t", seconds, path }) == 0);
@@ -81,6 +103,33 @@ int main(int argc, char **argv)
             music = path;
     }
 
+    // Encode stereo 24-bit PCM with distinct low-order bits on each channel.
+    // FFmpeg delivers decoded 24-bit FLAC left-aligned in signed 32-bit samples.
+    QByteArray original;
+    QDataStream pcm(&original, QIODevice::WriteOnly);
+    pcm.setByteOrder(QDataStream::LittleEndian);
+    for(int i = 0; i < 9600; ++i)
+        for(int step : {4711, 8231})
+            pcm << qint32((i * step % 15485863 - 7742931) * 256);
+    QFile raw(temp.filePath("reference.s32le"));
+    CHECK(raw.open(QIODevice::WriteOnly) && raw.write(original) == original.size());
+    raw.close();
+    QFile hires(temp.filePath("reference.flac"));
+    CHECK(QProcess::execute(argv[1], {"-v", "error", "-f", "s32le", "-ar", "96000", "-ac", "2",
+                    "-i", raw.fileName(), "-c:a", "flac", hires.fileName()}) == 0);
+    auto *flac = Decoder::findByFilePath(hires.fileName());
+    CHECK(flac && hires.open(QIODevice::ReadOnly));
+    {
+        std::unique_ptr<Decoder> decoder(flac->create(hires.fileName(), &hires));
+        CHECK(decoder && decoder->initialize() && decoder->audioParameters().sampleRate() == 96000);
+        QByteArray decoded;
+        unsigned char buffer[8192];
+        qint64 n;
+        while((n = decoder->read(buffer, sizeof(buffer))) > 0)
+            decoded.append(reinterpret_cast<const char *>(buffer), n);
+        CHECK(n == 0 && decoded == original);
+    }
+
     QFile invalid(temp.filePath("invalid.mp3"));
     CHECK(invalid.open(QIODevice::WriteOnly));
     invalid.write("invalid audio");
@@ -92,7 +141,10 @@ int main(int argc, char **argv)
     CHECK(lyrics.open(QIODevice::WriteOnly));
     lyrics.write("[offset:100]\n[00:00.10][00:06.10]");
     lyrics.write(QByteArray::fromHex("b4baccec"));
-    lyrics.write("\n[00:03.10]Chorus\n");
+    QmmpTextCodec legacy("GB18030");
+    lyrics.write(legacy.fromUnicode(QStringLiteral("\n[00:01.10]风把夜色轻轻吹散\n"
+        "[00:02.10]街灯亮起\n[00:03.10]窗外的光，落在琴弦上\n"
+        "[00:07.10]一曲未央\n[00:08.10]等天色微亮\n")));
     lyrics.close();
 
     MediaPlayer player;
@@ -102,8 +154,18 @@ int main(int argc, char **argv)
     std::unique_ptr<QObject> ui(factory->create());
     auto *window = qobject_cast<QMainWindow *>(ui.get());
     CHECK(window && window->isVisible());
+    auto *menuButton = window->findChild<QToolButton *>("medallion");
+    CHECK(menuButton && menuButton->menu());
+    const auto menuItems = menuButton->menu()->actions();
+    CHECK(menuItems.size() >= 4 && menuItems.last()->text() == "退出");
+    CHECK(menuItems.at(menuItems.size() - 2)->isSeparator());
+    int skinIndex = -1;
+    for(int i = 1; i < menuItems.size(); ++i)
+        if(menuItems[i]->text() == "皮肤" && menuItems[i]->menu())
+            skinIndex = i;
+    CHECK(skinIndex > 0 && menuItems[skinIndex - 1]->text() == "视图");
     auto *current = window->findChild<QLabel *>("activeLyric");
-    auto *list = window->findChild<QListView *>();
+    auto *list = window->findChild<QListView *>("tracks");
     auto *title = window->findChild<QLabel *>("song");
     CHECK(current && list && title);
     helper.replaceAndPlay({music});
@@ -111,13 +173,135 @@ int main(int argc, char **argv)
     CHECK(waitFor([&] { return core->state() == Qmmp::Playing && current->text() == "春天"; }));
     CHECK(list->currentIndex().row() == 0 && title->text() == "春天");
     core->seek(4200);
-    CHECK(waitFor([&] { return current->text() == "Chorus"; }));
+    CHECK(waitFor([&] { return current->text() == "窗外的光，落在琴弦上"; }));
     core->seek(6500);
     CHECK(waitFor([&] { return current->text() == "春天"; }));
     core->seek(4000);
-    CHECK(waitFor([&] { return current->text() == "Chorus"; }));
-    if(argc == 7)
-        CHECK(window->grab().save(QString::fromLocal8Bit(argv[6])));
+    CHECK(waitFor([&] { return current->text() == "窗外的光，落在琴弦上"; }));
+    CHECK(window->windowFlags().testFlag(Qt::FramelessWindowHint));
+    CHECK(list->currentIndex().data(Qt::UserRole).toLongLong() == 9000);
+    auto *eqDock = window->findChild<QDockWidget *>("equalizer");
+    auto *lyricDock = window->findChild<QDockWidget *>("lyrics");
+    auto *listDock = window->findChild<QDockWidget *>("playlist");
+    CHECK(eqDock && lyricDock && listDock);
+    auto *order = listDock->findChild<QToolButton *>("playOrder");
+    auto *playSettings = QmmpUiSettings::instance();
+    CHECK(order && order->parentWidget()->layout()->itemAt(3)->widget() == order);
+    CHECK(!playSettings->isShuffle() && order->accessibleName() == "顺序播放");
+    order->click();
+    CHECK(playSettings->isShuffle() && order->accessibleName() == "随机播放");
+    playSettings->setShuffle(false);
+    CHECK(!order->isChecked() && order->accessibleName() == "顺序播放");
+    CHECK(waitFor([&] { return eqDock->isFloating() && eqDock->isVisible() &&
+                               eqDock->y() == window->frameGeometry().bottom()+1 &&
+                               listDock->y() == eqDock->frameGeometry().bottom()+1 &&
+                               lyricDock->y() == listDock->frameGeometry().bottom()+1; }));
+    CHECK(!core->eqSettings().isEnabled());
+    auto *visual = window->findChild<QWidget *>("visualization");
+    CHECK(visual && visual->accessibleName() == "频谱柱");
+    auto cycle = [&] {
+        const QPointF pos(visual->rect().center());
+        for(auto type : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease})
+        {
+            QMouseEvent event(type, pos, visual->mapToGlobal(pos), Qt::LeftButton,
+                              type == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, {});
+            QApplication::sendEvent(visual, &event);
+        }
+    };
+    for(const QString &name : {"时域波形", "左右声道电平", "频谱柱"})
+    {
+        cycle();
+        CHECK(visual->accessibleName() == name && core->state() == Qmmp::Playing);
+    }
+    auto *band = eqDock->findChild<QSlider *>("band4");
+    CHECK(band && core->eqSettings().bands() == 10);
+    band->setValue(5);
+    CHECK(core->eqSettings().gain(4) == 5);
+    QAction *rock = nullptr;
+    for(auto *action : eqDock->findChildren<QAction *>())
+        if(action->text() == "Rock")
+            rock = action;
+    CHECK(rock);
+    rock->trigger();
+    CHECK(core->eqSettings().isEnabled() && band->value() == core->eqSettings().gain(4));
+    QAction *blue = nullptr, *violet = nullptr;
+    for(auto *action : window->findChildren<QAction *>())
+    {
+        if(action->data() == ":/classic/skins/midnight.ini") blue = action;
+        if(action->data() == ":/classic/skins/violet.ini") violet = action;
+    }
+    CHECK(blue && violet);
+    blue->trigger();
+    CHECK(window->property("spectrumColor").toString() == "#89e6db");
+    violet->trigger();
+    if(argc >= 7)
+    {
+        samples.removeAll(music);
+        PlayListManager::instance()->addPaths(samples);
+        CHECK(waitFor([&] { return list->model()->rowCount() == samples.size()+1; }));
+        const QList<QWidget *> panels {window,eqDock,listDock,lyricDock};
+        QRect bounds;
+        for(auto *panel : panels)
+            bounds |= panel->frameGeometry();
+        QImage image(bounds.size(),QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::transparent);
+        QPainter painter(&image);
+        for(auto *panel : panels)
+            painter.drawPixmap(panel->frameGeometry().topLeft()-bounds.topLeft(),panel->grab());
+        painter.end();
+        CHECK(image.save(QString::fromLocal8Bit(argv[6])));
+    }
+    auto *library = window->findChild<QToolButton *>("libraryKey");
+    CHECK(library);
+    library->click();
+    auto *search = window->findChild<QDialog *>("JumpToTrackDialog");
+    CHECK(search && search->isVisible() && search->windowFlags().testFlag(Qt::FramelessWindowHint));
+    auto *input = search->findChild<QLineEdit *>("filterLineEdit");
+    auto *results = search->findChild<QListView *>("songsListView");
+    CHECK(input && results && results->model()->rowCount() > 0);
+    CHECK(input->palette().color(QPalette::Base) == QColor("#11101f"));
+    blue->trigger();
+    CHECK(input->palette().color(QPalette::Base) != QColor("#11101f"));
+    violet->trigger();
+    input->setText("春天");
+    CHECK(results->model()->rowCount() == 1);
+    input->clear();
+    if(argc >= 8)
+        CHECK(search->grab().save(QDir(argv[7]).filePath("classic-music.png")));
+    search->close();
+    QAction *preferences = nullptr;
+    for(auto *action : menuItems)
+        if(action->text() == "设置…")
+            preferences = action;
+    CHECK(preferences);
+    bool preferencesStyled = false;
+    QTimer::singleShot(0, [&] {
+        auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+        if(!dialog)
+            return;
+        auto *pages = dialog->findChild<QListWidget *>("contentsWidget");
+        auto *edit = dialog->findChild<QLineEdit *>("groupLineEdit");
+        preferencesStyled = dialog->windowFlags().testFlag(Qt::FramelessWindowHint) &&
+                pages && pages->count() >= 5 && edit && edit->palette().color(QPalette::Base) == QColor("#11101f");
+        if(argc >= 8)
+            preferencesStyled &= dialog->grab().save(QDir(argv[7]).filePath("classic-settings.png"));
+        dialog->reject();
+    });
+    preferences->trigger();
+    CHECK(preferencesStyled);
+    auto *maximize = window->findChild<QToolButton *>("maximize");
+    auto *minimize = window->findChild<QToolButton *>("minimize");
+    CHECK(maximize && minimize);
+    maximize->click();
+    CHECK(window->isMaximized());
+    maximize->click();
+    CHECK(!window->isMaximized());
+    minimize->click();
+    CHECK(window->isMinimized());
+    window->showNormal();
+    CHECK(waitFor([&] { return eqDock->y() == window->frameGeometry().bottom()+1 &&
+                               listDock->y() == eqDock->frameGeometry().bottom()+1 &&
+                               lyricDock->y() == listDock->frameGeometry().bottom()+1; }));
     // Reload the sidecar on a track change and exercise UTF-8 with a BOM.
     const QString second = temp.filePath("雨声.wav");
     CHECK(QFile::copy(music, second));
@@ -147,5 +331,28 @@ int main(int argc, char **argv)
     CHECK(dropTrack(title));
     CHECK(waitFor([&] { return title->text() == "雨声" && current->text() == "雨声响起"; }));
     player.stop();
+    // A user skin may override palette and widget artwork and survive relaunch.
+    const QString skinFile = temp.filePath("custom.ini");
+    CHECK(QFile::copy(":/classic/skins/midnight.ini", skinFile));
+    QFile::setPermissions(skinFile, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    {
+        QSettings skin(skinFile,QSettings::IniFormat);
+        skin.setValue("Skin/Name","自定义");
+        skin.setValue("Skin/Style","custom.qss");
+        skin.setValue("Colors/spectrum","#88aa77");
+    }
+    QFile style(temp.filePath("custom.qss"));
+    CHECK(style.open(QIODevice::WriteOnly));
+    style.write("QLabel#clock { color: #77aa88; }");
+    style.close();
+    QSettings().setValue("Classic/skinFiles", QStringList{skinFile});
+    QSettings().setValue("Classic/skin",skinFile);
+    cycle();
+    ui.reset();
+    ui.reset(factory->create());
+    window = qobject_cast<QMainWindow *>(ui.get());
+    CHECK(window && window->property("spectrumColor") == "#88aa77");
+    CHECK(window->findChild<QWidget *>("visualization")->accessibleName() == "时域波形");
+    CHECK(window->styleSheet().contains("#77aa88"));
     return 0;
 }

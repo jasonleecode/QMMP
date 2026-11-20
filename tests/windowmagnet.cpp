@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     playlist.move(420, 250);
     lyrics.move(480, 440);
     app.processEvents();
-    WindowMagnet magnet(&player, &playlist, &lyrics);
+    WindowMagnet magnet(&player, {&playlist, &lyrics});
 
     auto moveBelow = [&](QWidget &panel, const QWidget &anchor) {
         const QRect frame = anchor.frameGeometry();

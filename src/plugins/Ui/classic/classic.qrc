@@ -1,0 +1,5 @@
+<RCC><qresource prefix="/classic">
+<file>skins/classic.qss</file><file>skins/violet.ini</file><file>skins/midnight.ini</file>
+<file>skins/check.svg</file>
+<file alias="eq.preset">../skinned/resources/eq.preset</file>
+</qresource></RCC>

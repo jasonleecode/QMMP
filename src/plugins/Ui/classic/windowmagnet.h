@@ -3,12 +3,12 @@
 
 #include <QDockWidget>
 #include <QMainWindow>
-#include <array>
+#include <QList>
 
 class WindowMagnet final : public QObject
 {
 public:
-    WindowMagnet(QMainWindow *main, QDockWidget *list, QDockWidget *lyrics);
+    WindowMagnet(QMainWindow *main, const QList<QDockWidget *> &panels);
     void arrange();
 
 private:
@@ -16,8 +16,8 @@ private:
     void follow(int source);
     void remember();
 
-    std::array<QWidget *, 3> windows;
-    std::array<QRect, 3> frames;
+    QList<QWidget *> windows;
+    QList<QRect> frames;
     bool adjusting = false;
 };
 

@@ -32,10 +32,11 @@
 #include "playlistitem.h"
 #include "playlisttrack.h"
 #include "playlistgroup.h"
-#include "coverloader_p.h"
+#include <QImage>
 #include "qmmpui_export.h"
 
 class FileLoader;
+class CoverLoader;
 class PlayState;
 class PlayListFormat;
 class PlayListModel;

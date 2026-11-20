@@ -26,6 +26,10 @@ mkdir -p "$bundle" "$bindir"
 mv "$usr/bin/qmmp" "$bindir/"
 ln -s ../lib/qmmp/bin/qmmp "$usr/bin/qmmp"
 echo -e '[Paths]\nPrefix=../qt6\nPlugins=plugins' > "$bindir/qt.conf"
+qt_translations=$("$qt/bin/qtpaths" --query QT_INSTALL_TRANSLATIONS)
+if [[ -f "$qt_translations/qtbase_zh_CN.qm" ]]; then
+    install -Dm644 "$qt_translations/qtbase_zh_CN.qm" "$bundle/translations/qtbase_zh_CN.qm"
+fi
 
 # Keep Qt's platform, image, icon and audio plugins together with their private libraries.
 install_qt_plugin() {
