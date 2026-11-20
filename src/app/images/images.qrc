@@ -7,6 +7,6 @@
         <file>64x64/qmmp.png</file>
         <file>128x128/qmmp.png</file>
         <file>256x256/qmmp.png</file>
-        <file>scalable/qmmp.svgz</file>
+        <file>scalable/qmmp-classic.svg</file>
     </qresource>
 </RCC>

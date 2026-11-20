@@ -62,6 +62,7 @@ Keywords=player;audio;video;multimedia;
 Keywords[fr]=lecteur;audio;vidéo;multimédia;
 Exec=qmmp %F
 Icon=qmmp-classic
+StartupWMClass=qmmp
 Terminal=false
 Type=Application
 Categories=AudioVideo;Player;Audio;Qt;

@@ -59,6 +59,8 @@ static void matchFrameWidth(QWidget *panel, int width)
 
 void WindowMagnet::arrange()
 {
+    if(suspended)
+        return;
     auto *handle = windows[0]->windowHandle();
     if(!handle || !handle->isExposed())
     {
@@ -78,6 +80,8 @@ void WindowMagnet::arrange()
     }
     // Window managers publish frame margins after mapping the floating panels.
     QTimer::singleShot(100, this, [this] {
+        if(suspended)
+            return;
         auto *main = windows[0];
         const QRect area = main->screen()->availableGeometry();
         const int groupWidth = main->frameGeometry().width();
@@ -101,9 +105,17 @@ void WindowMagnet::arrange()
     });
 }
 
+void WindowMagnet::setSuspended(bool suspend)
+{
+    suspended = suspend;
+    adjusting = false;
+    if(!suspend)
+        remember();
+}
+
 bool WindowMagnet::eventFilter(QObject *object, QEvent *event)
 {
-    if(!adjusting && !windows[0]->isMaximized() && !windows[0]->isMinimized())
+    if(!suspended && !adjusting && !windows[0]->isMaximized() && !windows[0]->isMinimized())
     {
         for(int i = 0; i < windows.size(); ++i)
         {

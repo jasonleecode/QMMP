@@ -29,6 +29,8 @@ protected:
 private:
     void createMenus();
     QWidget *createDeck();
+    QWidget *createCompactBar();
+    void setCompactMode(bool compact);
     QWidget *createPlaylist();
     QWidget *createLyrics();
     void togglePlayback();
@@ -40,10 +42,17 @@ private:
 
     QMenu *m_menu, *m_view;
     QDockWidget *m_playlistDock, *m_eqDock, *m_lyricsDock;
-    QLabel *m_title, *m_status, *m_clock;
+    QLabel *m_title, *m_status, *m_clock = nullptr;
+    bool m_showRemaining = false;
+    qint64 m_displayPosition = 0;
     std::array<QLabel *,7> m_lines;
     QSlider *m_position;
     ConsoleKey *m_play;
+    QWidget *m_deck, *m_compactBar;
+    ConsoleKey *m_compactPlay;
+    QLabel *m_compactTitle;
+    QByteArray m_normalGeometry, m_normalDocks;
+    QRect m_normalRect;
     QListView *m_list;
     QListWidget *m_collections;
     TrackList *m_tracks;

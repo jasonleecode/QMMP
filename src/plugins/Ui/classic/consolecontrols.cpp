@@ -91,7 +91,7 @@ void ConsoleKey::paintEvent(QPaintEvent *)
     QColor ink = palette().color(QPalette::ButtonText);
     p.setPen(QPen(ink, 1.65, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
     p.setBrush(Qt::NoBrush);
-    const Glyph glyph = m_glyph == Maximize && window()->isMaximized() ? Restore : m_glyph;
+    const Glyph glyph = m_glyph;
     switch(glyph)
     {
     case Sequential:
@@ -109,7 +109,10 @@ void ConsoleKey::paintEvent(QPaintEvent *)
     case Close:
         p.drawLine(-4,-4,4,4); p.drawLine(-4,4,4,-4); break;
     case Minimize: p.drawLine(-5,4,5,4); break;
-    case Maximize: p.drawRect(QRectF(-5,-4.5,10,9)); break;
+    case Compact:
+        p.drawRect(QRectF(-6,-4,12,8));
+        p.fillRect(QRectF(0,-3,5,2), ink);
+        break;
     case Restore:
         p.drawPolyline(QPolygonF{{-2,-3},{-2,-5},{5,-5},{5,2},{3,2}});
         p.drawRect(QRectF(-5,-2,8,7)); break;
@@ -129,8 +132,21 @@ void ConsoleKey::paintEvent(QPaintEvent *)
             p.drawPolygon(QPolygonF{{0,-6},{5,2},{-5,2}}); p.drawRect(QRectF(-5,3.5,10,1.8)); break;
         case Speaker:
             p.drawPolygon(QPolygonF{{-7,-2},{-4,-2},{0,-5},{0,5},{-4,2},{-7,2}});
-            p.setPen(QPen(ink,1.4)); p.setBrush(Qt::NoBrush);
-            p.drawArc(QRectF(-3,-4,8,8),-65*16,130*16); break;
+            if(isChecked())
+            {
+                const QLineF slash(-6, 6, 6, -6);
+                p.setPen(QPen(palette().color(QPalette::Shadow), 4, Qt::SolidLine, Qt::RoundCap));
+                p.drawLine(slash);
+                p.setPen(QPen(ink, 2.2, Qt::SolidLine, Qt::RoundCap));
+                p.drawLine(slash);
+            }
+            else
+            {
+                p.setPen(QPen(ink, 1.4));
+                p.setBrush(Qt::NoBrush);
+                p.drawArc(QRectF(-3,-4,8,8), -65*16, 130*16);
+            }
+            break;
         default: break;
         }
     }
@@ -170,9 +186,8 @@ ConsoleTitle::ConsoleTitle(const QString &title, QWidget *owner, QMenu *playerMe
     };
     if(m_main)
     {
-        add(ConsoleKey::Maximize, tr("最大化 / 还原"), [owner] {
-            owner->isMaximized() ? owner->showNormal() : owner->showMaximized();
-        })->setObjectName("maximize");
+        add(ConsoleKey::Compact, tr("切换到迷你模式"), [this] { emit compactRequested(); })
+                ->setObjectName("compactMode");
         add(ConsoleKey::Minimize, tr("最小化"), [owner] { owner->showMinimized(); })->setObjectName("minimize");
     }
     add(ConsoleKey::Close, tr("关闭"), [owner] { owner->close(); })->setObjectName("closeKey");
@@ -197,6 +212,6 @@ void ConsoleTitle::mouseMoveEvent(QMouseEvent *e)
 void ConsoleTitle::mouseDoubleClickEvent(QMouseEvent *e)
 {
     if(m_main && e->button() == Qt::LeftButton)
-        m_owner->isMaximized() ? m_owner->showNormal() : m_owner->showMaximized();
+        emit compactRequested();
     else e->ignore();
 }

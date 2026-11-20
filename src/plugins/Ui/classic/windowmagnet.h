@@ -10,6 +10,7 @@ class WindowMagnet final : public QObject
 public:
     WindowMagnet(QMainWindow *main, const QList<QDockWidget *> &panels);
     void arrange();
+    void setSuspended(bool suspended);
 
 private:
     bool eventFilter(QObject *object, QEvent *event) override;
@@ -19,6 +20,7 @@ private:
     QList<QWidget *> windows;
     QList<QRect> frames;
     bool adjusting = false;
+    bool suspended = false;
 };
 
 #endif

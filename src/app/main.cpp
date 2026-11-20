@@ -75,6 +75,7 @@ int main(int argc, char *argv[])
     QApplication a(argc, argv);
     a.setApplicationName(u"qmmp"_s);
     a.setOrganizationName(u"qmmp"_s);
+    a.setDesktopFileName(a.applicationName());
     QIcon icon;
     icon.addFile(u":/16x16/qmmp.png"_s);
     icon.addFile(u":/32x32/qmmp.png"_s);
@@ -83,7 +84,7 @@ int main(int argc, char *argv[])
     icon.addFile(u":/64x64/qmmp.png"_s);
     icon.addFile(u":/128x128/qmmp.png"_s);
     icon.addFile(u":/256x256/qmmp.png"_s);
-    icon.addFile(u":/scalable/qmmp.svgz"_s);
+    icon.addFile(u":/scalable/qmmp-classic.svg"_s);
     a.setWindowIcon(icon);
 
     QMMPStarter starter;

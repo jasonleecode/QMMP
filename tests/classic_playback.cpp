@@ -21,6 +21,7 @@
 #include <QMainWindow>
 #include <QProcess>
 #include <QSettings>
+#include <QScreen>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
@@ -45,6 +46,17 @@ static bool waitFor(const std::function<bool()> &condition)
         QThread::msleep(10);
     }
     return condition();
+}
+
+static void clickWidget(QWidget *widget)
+{
+    const QPointF pos(widget->rect().center());
+    for(auto type : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease})
+    {
+        QMouseEvent event(type, pos, widget->mapToGlobal(pos), Qt::LeftButton,
+                          type == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, {});
+        QApplication::sendEvent(widget, &event);
+    }
 }
 
 static bool linkPlugin(const QString &source, const QString &dir)
@@ -174,6 +186,28 @@ int main(int argc, char **argv)
     CHECK(list->currentIndex().row() == 0 && title->text() == "春天");
     core->seek(4200);
     CHECK(waitFor([&] { return current->text() == "窗外的光，落在琴弦上"; }));
+    auto *clock = window->findChild<QLabel *>("clock");
+    CHECK(clock && clock->text() == "00:04");
+    auto *mute = window->findChild<QToolButton *>("mute");
+    CHECK(mute && !mute->isChecked());
+    mute->click();
+    CHECK(core->isMuted() && mute->isChecked());
+    core->setMuted(false);
+    CHECK(!mute->isChecked());
+    core->pause();
+    CHECK(waitFor([&] { return core->state() == Qmmp::Paused; }));
+    clickWidget(clock);
+    CHECK(clock->text() == "-00:05" && core->state() == Qmmp::Paused);
+    auto *seek = window->findChild<QSlider *>("progress");
+    CHECK(seek);
+    seek->setValue(seek->maximum() / 2);
+    CHECK(clock->text() == "-00:05");
+    seek->setValue(3 * seek->maximum() / 4);
+    CHECK(clock->text() == "-00:03");
+    clickWidget(clock);
+    CHECK(clock->text() == "00:06");
+    core->pause();
+    CHECK(waitFor([&] { return core->state() == Qmmp::Playing; }));
     core->seek(6500);
     CHECK(waitFor([&] { return current->text() == "春天"; }));
     core->seek(4000);
@@ -199,18 +233,9 @@ int main(int argc, char **argv)
     CHECK(!core->eqSettings().isEnabled());
     auto *visual = window->findChild<QWidget *>("visualization");
     CHECK(visual && visual->accessibleName() == "频谱柱");
-    auto cycle = [&] {
-        const QPointF pos(visual->rect().center());
-        for(auto type : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease})
-        {
-            QMouseEvent event(type, pos, visual->mapToGlobal(pos), Qt::LeftButton,
-                              type == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton, {});
-            QApplication::sendEvent(visual, &event);
-        }
-    };
     for(const QString &name : {"时域波形", "左右声道电平", "频谱柱"})
     {
-        cycle();
+        clickWidget(visual);
         CHECK(visual->accessibleName() == name && core->state() == Qmmp::Playing);
     }
     auto *band = eqDock->findChild<QSlider *>("band4");
@@ -289,13 +314,44 @@ int main(int argc, char **argv)
     });
     preferences->trigger();
     CHECK(preferencesStyled);
-    auto *maximize = window->findChild<QToolButton *>("maximize");
+    const QString nextSong = temp.filePath("下一曲.wav");
+    CHECK(QFile::copy(music, nextSong));
+    helper.replaceAndPlay({music, nextSong});
+    CHECK(waitFor([&] { return list->model()->rowCount() == 2 && core->state() == Qmmp::Playing; }));
+    auto *compact = window->findChild<QToolButton *>("compactMode");
     auto *minimize = window->findChild<QToolButton *>("minimize");
-    CHECK(maximize && minimize);
-    maximize->click();
-    CHECK(window->isMaximized());
-    maximize->click();
-    CHECK(!window->isMaximized());
+    auto *bar = window->findChild<QWidget *>("compactBar");
+    auto *barTitle = window->findChild<QLabel *>("compactTitle");
+    CHECK(compact && minimize && bar && barTitle);
+    const QRect mainFrame = window->frameGeometry();
+    const QRect listFrame = listDock->frameGeometry();
+    lyricDock->hide();
+    compact->click();
+    CHECK(waitFor([&] { return bar->isVisible() && window->height() == 32 &&
+                               window->frameGeometry().topRight() == window->screen()->availableGeometry().topRight(); }));
+    CHECK(!eqDock->isVisible() && !listDock->isVisible() && !lyricDock->isVisible());
+    if(argc >= 8)
+        CHECK(window->grab().save(QDir(argv[7]).filePath("classic-mini.png")));
+    auto barButton = [&](const QString &name) -> QToolButton * {
+        for(auto *key : bar->findChildren<QToolButton *>())
+            if(key->accessibleName() == name)
+                return key;
+        return nullptr;
+    };
+    CHECK(barButton("下一首") && barButton("上一首") && barButton("暂停") && barButton("还原主窗口"));
+    barButton("下一首")->click();
+    CHECK(waitFor([&] { return barTitle->text() == "下一曲"; }));
+    barButton("上一首")->click();
+    CHECK(waitFor([&] { return barTitle->text() == "春天"; }));
+    barButton("暂停")->click();
+    CHECK(waitFor([&] { return core->state() == Qmmp::Paused && barButton("播放"); }));
+    barButton("播放")->click();
+    CHECK(waitFor([&] { return core->state() == Qmmp::Playing; }));
+    barButton("还原主窗口")->click();
+    CHECK(waitFor([&] { return !bar->isVisible() && window->frameGeometry() == mainFrame &&
+                               listDock->frameGeometry() == listFrame && listDock->isVisible() && eqDock->isVisible(); }));
+    CHECK(!lyricDock->isVisible());
+    lyricDock->show();
     minimize->click();
     CHECK(window->isMinimized());
     window->showNormal();
@@ -328,8 +384,10 @@ int main(int argc, char **argv)
         CHECK(waitFor([&] { return list->model()->rowCount() == count + 1; }));
         CHECK(core->state() == Qmmp::Playing && title->text() == "春天");
     }
+    clickWidget(clock);
     CHECK(dropTrack(title));
     CHECK(waitFor([&] { return title->text() == "雨声" && current->text() == "雨声响起"; }));
+    CHECK(clock->text() == "-00:09");
     player.stop();
     // A user skin may override palette and widget artwork and survive relaunch.
     const QString skinFile = temp.filePath("custom.ini");
@@ -347,7 +405,7 @@ int main(int argc, char **argv)
     style.close();
     QSettings().setValue("Classic/skinFiles", QStringList{skinFile});
     QSettings().setValue("Classic/skin",skinFile);
-    cycle();
+    clickWidget(visual);
     ui.reset();
     ui.reset(factory->create());
     window = qobject_cast<QMainWindow *>(ui.get());

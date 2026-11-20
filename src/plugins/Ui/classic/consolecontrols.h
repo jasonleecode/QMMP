@@ -21,7 +21,7 @@ private:
 class ConsoleKey final : public QToolButton
 {
 public:
-    enum Glyph { Play, Pause, Stop, Previous, Next, Eject, Minimize, Maximize, Restore, Close, Speaker, Sequential, Shuffle };
+    enum Glyph { Play, Pause, Stop, Previous, Next, Eject, Minimize, Compact, Restore, Close, Speaker, Sequential, Shuffle };
     ConsoleKey(Glyph glyph, const QString &label, QWidget *parent);
     void setGlyph(Glyph glyph);
 protected:
@@ -32,9 +32,12 @@ private:
 
 class ConsoleTitle final : public QWidget
 {
+    Q_OBJECT
 public:
     ConsoleTitle(const QString &title, QWidget *owner, QMenu *playerMenu = nullptr);
     QHBoxLayout *row;
+signals:
+    void compactRequested();
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
